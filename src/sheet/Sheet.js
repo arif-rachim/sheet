@@ -29,14 +29,14 @@ function renderComponent({
 
         const {elements} = Array.from({length: totalColInsideViewPort}).reduce((colAcc,_,colIndexInsideViewPort) => {
             const colIndex = totalColBeforeViewPort + colIndexInsideViewPort;
-            const colWidth = widthsOfColInsideViewPort[colIndex];
+            const colWidth = widthsOfColInsideViewPort[colIndex] || 200;
 
             colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex} top={acc.top}
                                                width={colWidth}
                                                left={colAcc.left} height={rowHeight}/>);
             colAcc.left = colAcc.left + colWidth;
             return colAcc;
-        },{elements:[],left:totalColBeforeViewPort});
+        },{elements:[],left:totalWidthBeforeViewPort});
 
         acc.top = acc.top + rowHeight;
         acc.elements.push(elements);
@@ -91,7 +91,7 @@ export function Sheet({data, columns}) {
     }, []);
 
     useObserverListener([$viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight, $customColWidth], () => {
-        const viewPortDimension = $viewPortDimension.current;
+        // const viewPortDimension = $viewPortDimension.current;
         const scrollerPosition = $scrollerPosition.current;
         const defaultRowHeight = $defaultRowHeight.current;
         const defaultColWidth = $defaultColWidth.current;
@@ -122,7 +122,7 @@ export function Sheet({data, columns}) {
             const index = numberOfColBeforeViewPort.colIndex + zeroIndex;
             const width = customColWidth[index] ? customColWidth[index] : defaultColWidth;
             const nextWidth = width + acc.totalWidth;
-
+            const viewPortDimension = $viewPortDimension.current;
             if (nextWidth > viewPortDimension.width) {
                 acc.widths[index] = width;
                 acc.colIndex = index;
@@ -158,6 +158,7 @@ export function Sheet({data, columns}) {
             const index = numberOfRowBeforeViewPort.rowIndex + zeroIndex;
             const height = customRowHeight[index] ? customRowHeight[index] : defaultRowHeight;
             const nextHeight = height + acc.totalHeight;
+            const viewPortDimension = $viewPortDimension.current;
             if (nextHeight > viewPortDimension.height) {
                 acc.heights[index] = height;
                 acc.rowIndex = index;
