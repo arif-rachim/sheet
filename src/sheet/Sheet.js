@@ -18,16 +18,16 @@ function calculateBeforeViewPort(columns, customLength, defaultLength, scrollerP
     }, {index: 0, totalLength: 0, complete: false});
 }
 
-const SCROLLER_SIZE = 30;
-
 function calculateInsideViewPort(data, indexBeforeViewPort, customLength, defaultLength, viewPortLength) {
-
-    viewPortLength = viewPortLength + SCROLLER_SIZE;
+    const firstCellLength = (customLength[indexBeforeViewPort] ? customLength[indexBeforeViewPort] : defaultLength);
+    viewPortLength = viewPortLength + firstCellLength;
     return data.slice(indexBeforeViewPort).reduce((acc, _, zeroIndex) => {
         if (acc.complete) {
             return acc;
         }
+
         const index = indexBeforeViewPort + zeroIndex;
+
         const length = customLength[index] ? customLength[index] : defaultLength;
         const nextLength = length + acc.totalLength;
 
@@ -136,15 +136,11 @@ function renderComponent({
                              setElements
                          }) {
     const {
-        index: lastRowIndexInsideViewPOrt,
-        totalLength: totalHeightInsideViewPort,
         lengths: heightsOfRowInsideViewPort
     } = numberOfRowInsideViewPort;
     const {index: lastRowIndexBeforeViewPort, totalLength: totalHeightBeforeViewPort} = numberOfRowBeforeViewPort;
 
     const {
-        index: lastColIndexInsideViewPort,
-        totalLength: totalWidthInsideViewPort,
         lengths: widthsOfColInsideViewPort
     } = numberOfColInsideViewPort;
     const {index: lastColIndexBeforeViewPort, totalLength: totalWidthBeforeViewPort} = numberOfColBeforeViewPort;
@@ -156,9 +152,6 @@ function renderComponent({
         const {elements} = Array.from({length: Object.keys(widthsOfColInsideViewPort).length}).reduce((colAcc, _, colIndexInsideViewPort) => {
             const colIndex = lastColIndexBeforeViewPort + colIndexInsideViewPort;
             const colWidth = widthsOfColInsideViewPort[colIndex];
-            if(colAcc.left === 70 && colIndex === 0){
-                debugger;
-            }
             colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex}
                                                top={acc.top}
                                                width={colWidth}
