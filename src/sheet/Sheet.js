@@ -1,83 +1,72 @@
 import React, {useEffect, useRef, useState} from "react";
 import {useObserver, useObserverListener} from "react-hook-useobserver";
 
-
-function renderComponent({
-                             numberOfRowInsideViewPort,
-                             numberOfRowBeforeViewPort,
-                             numberOfColInsideViewPort,
-                             numberOfColBeforeViewPort,
-                             setElements
-                         }) {
-    const {
-        rowIndex: totalRowInsideViewPort,
-        totalHeight: totalHeightInsideViewPort,
-        heights: heightsOfRowInsideViewPort
-    } = numberOfRowInsideViewPort;
-    const {rowIndex: totalRowBeforeViewPort, totalHeight: totalHeightBeforeViewPort} = numberOfRowBeforeViewPort;
-
-    const {
-        colIndex: totalColInsideViewPort,
-        totalWidth: totalWidthInsideViewPort,
-        widths: widthsOfColInsideViewPort
-    } = numberOfColInsideViewPort;
-    const {colIndex: totalColBeforeViewPort, totalWidth: totalWidthBeforeViewPort} = numberOfColBeforeViewPort;
-
-    const {elements} = Array.from({length: totalRowInsideViewPort}).reduce((acc, _, rowIndexInsideViewPort) => {
-        const rowIndex = totalRowBeforeViewPort + rowIndexInsideViewPort;
-        const rowHeight = heightsOfRowInsideViewPort[rowIndex];
-
-        const {elements} = Array.from({length: totalColInsideViewPort}).reduce((colAcc,_,colIndexInsideViewPort) => {
-            const colIndex = totalColBeforeViewPort + colIndexInsideViewPort;
-            const colWidth = widthsOfColInsideViewPort[colIndex] || 200;
-
-            colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex} top={acc.top}
-                                               width={colWidth}
-                                               left={colAcc.left} height={rowHeight}/>);
-            colAcc.left = colAcc.left + colWidth;
-            return colAcc;
-        },{elements:[],left:totalWidthBeforeViewPort});
-
-        acc.top = acc.top + rowHeight;
-        acc.elements.push(elements);
+function calculateBeforeViewPort(columns, customLength, defaultLength, scrollerPosition) {
+    return columns.reduce((acc, _, index) => {
+        if (acc.complete) {
+            return acc;
+        }
+        const length = customLength[index] ? customLength[index] : defaultLength;
+        const nextLength = length + acc.totalLength;
+        if (nextLength > scrollerPosition) {
+            acc.complete = true;
+            return acc;
+        }
+        acc.index = index + 1;
+        acc.totalLength = nextLength;
         return acc;
-    }, {elements: [], top: totalHeightBeforeViewPort});
-    setElements(elements.flat());
+    }, {index: 0, totalLength: 0, complete: false});
 }
 
-export function Sheet({data, columns}) {
-    const [$defaultRowHeight, setDefaultRowHeight] = useObserver(20);
-    const [$defaultColWidth, setDefaultColWidth] = useObserver(200);
-    const [$customRowHeight, setCustomRowHeight] = useObserver([]);
-    const [$customColWidth, setCustomColWidth] = useObserver([]);
+const SCROLLER_SIZE = 30;
+
+function calculateInsideViewPort(data, indexBeforeViewPort, customLength, defaultLength, viewPortLength) {
+
+    viewPortLength = viewPortLength + SCROLLER_SIZE;
+    return data.slice(indexBeforeViewPort).reduce((acc, _, zeroIndex) => {
+        if (acc.complete) {
+            return acc;
+        }
+        const index = indexBeforeViewPort + zeroIndex;
+        const length = customLength[index] ? customLength[index] : defaultLength;
+        const nextLength = length + acc.totalLength;
+
+        if (nextLength > viewPortLength) {
+            acc.lengths[index] = length;
+            acc.index = index;
+            acc.totalLength = nextLength;
+            acc.complete = true;
+            return acc;
+        }
+        acc.lengths[index] = length;
+        acc.index = index;
+        acc.totalLength = nextLength;
+        return acc;
+    }, {index: 0, totalLength: 0, complete: false, lengths: {}});
+}
+
+function calculateLength(customLength, data, defaultLength) {
+    const totalCustomLength = Object.keys(customLength).reduce((acc, key) => acc + customLength[key], 0);
+    const totalDefaultLength = (data.length - Object.keys(customLength).length) * defaultLength;
+    return totalDefaultLength + totalCustomLength;
+}
+
+export function Sheet({data, columns,styleContainer,styleViewPort,columnsLength={},rowsLength={}}) {
+    const [$defaultRowHeight, ] = useObserver(20);
+    const [$defaultColWidth, ] = useObserver(70);
+    const [$customRowHeight, ] = useObserver(rowsLength);
+    const [$customColWidth, ] = useObserver(columnsLength);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$scrollerPosition, setScrollerPosition] = useObserver({left: 0, top: 0});
     const [elements, setElements] = useState([]);
-    const [$totalWidthOfContent, setTotalWidthOfContent] = useObserver(() => {
-        const totalColumnFixWidth = $customColWidth.current.reduce((acc, value, index) => acc + value, 0);
-        const totalDefaultColumnWidth = (columns.length - $customColWidth.current.length) * $defaultColWidth.current;
-        return totalDefaultColumnWidth + totalColumnFixWidth;
-    });
 
-    useObserverListener($customColWidth, customColWidth => {
-        const totalColumnFixWidth = customColWidth.reduce((acc, value, index) => acc + value, 0);
-        const totalDefaultColumnWidth = (columns.length - customColWidth.length) * $defaultColWidth.current;
-        setTotalWidthOfContent(totalDefaultColumnWidth + totalColumnFixWidth);
-    });
+    const [$totalWidthOfContent, setTotalWidthOfContent] = useObserver(calculateLength($customColWidth.current, columns, $defaultColWidth.current));
+    useObserverListener($customColWidth, () => setTotalWidthOfContent(calculateLength($customColWidth.current, columns, $defaultColWidth.current)));
 
-    const [$totalHeightOfContent, setTotalHeightOfContent] = useObserver(() => {
-        const totalRowFixWidth = $customRowHeight.current.reduce((acc, value, index) => acc + value, 0);
-        const totalDefaultRowHeight = (data.length - $customRowHeight.current.length) * $defaultRowHeight.current;
-        return totalRowFixWidth + totalDefaultRowHeight;
-    });
+    const [$totalHeightOfContent, setTotalHeightOfContent] = useObserver(calculateLength($customRowHeight.current, data, $defaultRowHeight.current));
+    useObserverListener($customRowHeight, () => setTotalHeightOfContent(calculateLength($customRowHeight.current, data, $defaultRowHeight.current)));
 
-    useObserverListener($customRowHeight, customRowHeight => {
-        const totalRowFixWidth = customRowHeight.reduce((acc, value, index) => acc + value, 0);
-        const totalDefaultRowHeight = (data.length - customRowHeight.length) * $defaultRowHeight.current;
-        setTotalHeightOfContent(totalRowFixWidth + totalDefaultRowHeight);
-    });
-
-    const viewPortRef = useRef();
+    const viewPortRef = useRef({});
 
     useEffect(() => {
         const viewPortDom = viewPortRef.current;
@@ -91,86 +80,17 @@ export function Sheet({data, columns}) {
     }, []);
 
     useObserverListener([$viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight, $customColWidth], () => {
-        // const viewPortDimension = $viewPortDimension.current;
+
         const scrollerPosition = $scrollerPosition.current;
         const defaultRowHeight = $defaultRowHeight.current;
         const defaultColWidth = $defaultColWidth.current;
         const customRowHeight = $customRowHeight.current;
         const customColWidth = $customColWidth.current;
 
-
-        const numberOfColBeforeViewPort = columns.reduce((acc, _, index) => {
-            if (acc.complete) {
-                return acc;
-            }
-            const width = customColWidth[index] ? customColWidth[index] : defaultColWidth;
-            const nextWidth = width + acc.totalWidth;
-            if (nextWidth > scrollerPosition.left) {
-                acc.complete = true;
-                return acc;
-            }
-            acc.colIndex = index;
-            acc.totalWidth = nextWidth;
-            return acc;
-        }, {colIndex: 0, totalWidth: 0, complete: false});
-        console.log(numberOfColBeforeViewPort);
-
-        const numberOfColInsideViewPort = columns.slice(numberOfColBeforeViewPort.colIndex).reduce((acc, _, zeroIndex) => {
-            if (acc.complete) {
-                return acc;
-            }
-            const index = numberOfColBeforeViewPort.colIndex + zeroIndex;
-            const width = customColWidth[index] ? customColWidth[index] : defaultColWidth;
-            const nextWidth = width + acc.totalWidth;
-            const viewPortDimension = $viewPortDimension.current;
-            if (nextWidth > viewPortDimension.width) {
-                acc.widths[index] = width;
-                acc.colIndex = index;
-                acc.totalWidth = nextWidth;
-                acc.complete = true;
-                return acc;
-            }
-            acc.widths[index] = width;
-            acc.colIndex = index;
-            acc.totalWidth = nextWidth;
-            return acc;
-        }, {colIndex: 0, totalWidth: 0, complete: false, widths: []});
-
-        const numberOfRowBeforeViewPort = data.reduce((acc, _, index) => {
-            if (acc.complete) {
-                return acc;
-            }
-            const height = customRowHeight[index] ? customRowHeight[index] : defaultRowHeight;
-            const nextHeight = height + acc.totalHeight;
-            if (nextHeight > scrollerPosition.top) {
-                acc.complete = true;
-                return acc;
-            }
-            acc.rowIndex = index;
-            acc.totalHeight = nextHeight;
-            return acc;
-        }, {rowIndex: 0, totalHeight: 0, complete: false});
-
-        const numberOfRowInsideViewPort = data.slice(numberOfRowBeforeViewPort.rowIndex).reduce((acc, _, zeroIndex) => {
-            if (acc.complete) {
-                return acc;
-            }
-            const index = numberOfRowBeforeViewPort.rowIndex + zeroIndex;
-            const height = customRowHeight[index] ? customRowHeight[index] : defaultRowHeight;
-            const nextHeight = height + acc.totalHeight;
-            const viewPortDimension = $viewPortDimension.current;
-            if (nextHeight > viewPortDimension.height) {
-                acc.heights[index] = height;
-                acc.rowIndex = index;
-                acc.totalHeight = nextHeight;
-                acc.complete = true;
-                return acc;
-            }
-            acc.heights[index] = height;
-            acc.rowIndex = index;
-            acc.totalHeight = nextHeight;
-            return acc;
-        }, {rowIndex: 0, totalHeight: 0, complete: false, heights: []});
+        const numberOfColBeforeViewPort = calculateBeforeViewPort(columns, customColWidth, defaultColWidth, scrollerPosition.left);
+        const numberOfColInsideViewPort = calculateInsideViewPort(columns, numberOfColBeforeViewPort.index, customColWidth, defaultColWidth, $viewPortDimension.current.width);
+        const numberOfRowBeforeViewPort = calculateBeforeViewPort(data, customRowHeight, defaultRowHeight, scrollerPosition.top);
+        const numberOfRowInsideViewPort = calculateInsideViewPort(data, numberOfRowBeforeViewPort.index, customRowHeight, defaultRowHeight, $viewPortDimension.current.height);
 
         renderComponent({
             numberOfRowInsideViewPort,
@@ -179,15 +99,14 @@ export function Sheet({data, columns}) {
             numberOfColBeforeViewPort,
             setElements
         });
-
     });
-    return <div ref={viewPortRef} style={{width: '100%', height: '100%', overflow: 'auto', boxSizing: 'border-box'}}>
+    return <div ref={viewPortRef} style={{width: '100%', height: '100%', overflow: 'auto', boxSizing: 'border-box',...styleContainer}}>
         <div style={{
             width: $totalWidthOfContent.current,
             height: $totalHeightOfContent.current,
             boxSizing: 'border-box',
             backgroundColor: '#dddddd',
-            position: 'relative'
+            position: 'relative',...styleViewPort
         }}>
             {elements}
         </div>
@@ -203,7 +122,54 @@ const CellRenderer = React.memo(function CellRenderer({
                                                           colIndex = 0
                                                       }) {
     top = top || 0;
-    return <div style={{position: 'absolute', height, width, top, left, border: '1px solid #000',boxSizing:'border-box'}}>
+    return <div
+        style={{position: 'absolute', height, width, top, left, border: '1px solid #000', boxSizing: 'border-box',overflow:'hidden'}}>
         {`r:${rowIndex} c:${colIndex}`}
     </div>
 });
+
+function renderComponent({
+                             numberOfRowInsideViewPort,
+                             numberOfRowBeforeViewPort,
+                             numberOfColInsideViewPort,
+                             numberOfColBeforeViewPort,
+                             setElements
+                         }) {
+    const {
+        index: lastRowIndexInsideViewPOrt,
+        totalLength: totalHeightInsideViewPort,
+        lengths: heightsOfRowInsideViewPort
+    } = numberOfRowInsideViewPort;
+    const {index: lastRowIndexBeforeViewPort, totalLength: totalHeightBeforeViewPort} = numberOfRowBeforeViewPort;
+
+    const {
+        index: lastColIndexInsideViewPort,
+        totalLength: totalWidthInsideViewPort,
+        lengths: widthsOfColInsideViewPort
+    } = numberOfColInsideViewPort;
+    const {index: lastColIndexBeforeViewPort, totalLength: totalWidthBeforeViewPort} = numberOfColBeforeViewPort;
+
+    const {elements} = Array.from({length: Object.keys(heightsOfRowInsideViewPort).length}).reduce((acc, _, rowIndexInsideViewPort) => {
+        const rowIndex = lastRowIndexBeforeViewPort + rowIndexInsideViewPort;
+        const rowHeight = heightsOfRowInsideViewPort[rowIndex];
+
+        const {elements} = Array.from({length: Object.keys(widthsOfColInsideViewPort).length}).reduce((colAcc, _, colIndexInsideViewPort) => {
+            const colIndex = lastColIndexBeforeViewPort + colIndexInsideViewPort;
+            const colWidth = widthsOfColInsideViewPort[colIndex];
+            if(colAcc.left === 70 && colIndex === 0){
+                debugger;
+            }
+            colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex}
+                                               top={acc.top}
+                                               width={colWidth}
+                                               left={colAcc.left} height={rowHeight}/>);
+            colAcc.left = colAcc.left + colWidth;
+            return colAcc;
+        }, {elements: [], left: totalWidthBeforeViewPort});
+        acc.top = acc.top + rowHeight;
+        acc.elements.push(elements);
+        return acc;
+    }, {elements: [], top: totalHeightBeforeViewPort});
+    const flatElements = elements.flat();
+    setElements(flatElements);
+}

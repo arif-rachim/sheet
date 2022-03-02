@@ -1,7 +1,7 @@
 
 export function generateRandomData(){
-    const numberOfColumns = Math.ceil((1+Math.random()) * 30);
-    const numberOfRecords = Math.ceil((1+Math.random()) * 200);
+    const numberOfColumns = 50;
+    const numberOfRecords = 200;
     const columns = Array.from({length:numberOfColumns}).map((_,columnIndex) => pad('00000000',columnIndex.toString()));
     const data = Array.from({length:numberOfRecords}).map((_,rIndex) => {
         const rowIndex = pad('00000000',rIndex.toString());
