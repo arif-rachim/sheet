@@ -18,9 +18,10 @@ function calculateBeforeViewPort(columns, customLength, defaultLength, scrollerP
     }, {index: 0, totalLength: 0, complete: false});
 }
 
-function calculateInsideViewPort(data, indexBeforeViewPort, customLength, defaultLength, viewPortLength) {
-    const firstCellLength = (customLength[indexBeforeViewPort] ? customLength[indexBeforeViewPort] : defaultLength);
-    viewPortLength = viewPortLength + firstCellLength;
+function calculateInsideViewPort(data, indexBeforeViewPort, customLength, defaultLength, viewPortLength, lengthBeforeViewPort, lengthLastIndexBeforeViewPort) {
+    //const firstCellLength = (customLength[indexBeforeViewPort] ? customLength[indexBeforeViewPort] : defaultLength);
+    //viewPortLength = viewPortLength + firstCellLength;
+
     return data.slice(indexBeforeViewPort).reduce((acc, _, zeroIndex) => {
         if (acc.complete) {
             return acc;
@@ -31,7 +32,8 @@ function calculateInsideViewPort(data, indexBeforeViewPort, customLength, defaul
         const length = customLength[index] ? customLength[index] : defaultLength;
         const nextLength = length + acc.totalLength;
 
-        if (nextLength > viewPortLength) {
+        if ((nextLength + lengthLastIndexBeforeViewPort) > (viewPortLength + lengthBeforeViewPort)) {
+
             acc.lengths[index] = length;
             acc.index = index;
             acc.totalLength = nextLength;
@@ -51,11 +53,11 @@ function calculateLength(customLength, data, defaultLength) {
     return totalDefaultLength + totalCustomLength;
 }
 
-export function Sheet({data, columns,styleContainer,styleViewPort,columnsLength={},rowsLength={}}) {
-    const [$defaultRowHeight, ] = useObserver(20);
-    const [$defaultColWidth, ] = useObserver(70);
-    const [$customRowHeight, ] = useObserver(rowsLength);
-    const [$customColWidth, ] = useObserver(columnsLength);
+export function Sheet({data, columns, styleContainer, styleViewPort, columnsLength = {}, rowsLength = {}}) {
+    const [$defaultRowHeight,] = useObserver(20);
+    const [$defaultColWidth,] = useObserver(70);
+    const [$customRowHeight,] = useObserver(rowsLength);
+    const [$customColWidth,] = useObserver(columnsLength);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$scrollerPosition, setScrollerPosition] = useObserver({left: 0, top: 0});
     const [elements, setElements] = useState([]);
@@ -88,9 +90,9 @@ export function Sheet({data, columns,styleContainer,styleViewPort,columnsLength=
         const customColWidth = $customColWidth.current;
 
         const numberOfColBeforeViewPort = calculateBeforeViewPort(columns, customColWidth, defaultColWidth, scrollerPosition.left);
-        const numberOfColInsideViewPort = calculateInsideViewPort(columns, numberOfColBeforeViewPort.index, customColWidth, defaultColWidth, $viewPortDimension.current.width);
+        const numberOfColInsideViewPort = calculateInsideViewPort(columns, numberOfColBeforeViewPort.index, customColWidth, defaultColWidth, $viewPortDimension.current.width, scrollerPosition.left, numberOfColBeforeViewPort.totalLength);
         const numberOfRowBeforeViewPort = calculateBeforeViewPort(data, customRowHeight, defaultRowHeight, scrollerPosition.top);
-        const numberOfRowInsideViewPort = calculateInsideViewPort(data, numberOfRowBeforeViewPort.index, customRowHeight, defaultRowHeight, $viewPortDimension.current.height);
+        const numberOfRowInsideViewPort = calculateInsideViewPort(data, numberOfRowBeforeViewPort.index, customRowHeight, defaultRowHeight, $viewPortDimension.current.height, scrollerPosition.top, numberOfRowBeforeViewPort.totalLength);
 
         renderComponent({
             numberOfRowInsideViewPort,
@@ -100,13 +102,14 @@ export function Sheet({data, columns,styleContainer,styleViewPort,columnsLength=
             setElements
         });
     });
-    return <div ref={viewPortRef} style={{width: '100%', height: '100%', overflow: 'auto', boxSizing: 'border-box',...styleContainer}}>
+    return <div ref={viewPortRef}
+                style={{width: '100%', height: '100%', overflow: 'auto', boxSizing: 'border-box', ...styleContainer}}>
         <div style={{
             width: $totalWidthOfContent.current,
             height: $totalHeightOfContent.current,
             boxSizing: 'border-box',
             backgroundColor: '#dddddd',
-            position: 'relative',...styleViewPort
+            position: 'relative', ...styleViewPort
         }}>
             {elements}
         </div>
@@ -123,7 +126,16 @@ const CellRenderer = React.memo(function CellRenderer({
                                                       }) {
     top = top || 0;
     return <div
-        style={{position: 'absolute', height, width, top, left, border: '1px solid #000', boxSizing: 'border-box',overflow:'hidden'}}>
+        style={{
+            position: 'absolute',
+            height,
+            width,
+            top,
+            left,
+            border: '1px solid #000',
+            boxSizing: 'border-box',
+            overflow: 'hidden'
+        }}>
         {`r:${rowIndex} c:${colIndex}`}
     </div>
 });
