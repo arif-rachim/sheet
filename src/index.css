@@ -3,5 +3,6 @@ html,body,#root{
     margin: 0;
     padding : 0;
     font-family: Calibri, serif;
+    box-sizing: border-box;
 }
 

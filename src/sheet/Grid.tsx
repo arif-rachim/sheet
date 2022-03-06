@@ -1,5 +1,5 @@
 import {Horizontal, Vertical} from "react-hook-components";
-import Sheet, {CellComponentProps, Column} from "./Sheet";
+import Sheet, {CellComponentProps, Column, HeaderCellComponentProps} from "./Sheet";
 import {ObserverValue, useObserver} from "react-hook-useobserver";
 import {createContext, FC, MouseEvent as ReactMouseEvent, useCallback, useContext, useEffect, useRef} from "react";
 
@@ -11,13 +11,14 @@ interface GridProps {
 const FIRST_COLUMN_WIDTH = 10;
 
 const HANDLER_WIDTH = 7;
-const HeaderCell: FC<CellComponentProps> = (props) => {
+
+const CellComponentForHeader: FC<CellComponentProps> = (props) => {
     const index = props.colIndex;
-    const value = props.value;
     const mousePositionRef = useRef({currentX: 0, nextX: 0, dragActive: false});
     const handlerRightRef = useRef(defaultDif);
     const containerRef = useRef(defaultDif);
     const {onCellResize} = useContext(GridContext);
+    const HeaderCellComponent = props.column.headerCellComponent || DefaultHeaderCellComponent;
     const handleDrag = useCallback((event: ReactMouseEvent<HTMLDivElement, MouseEvent>) => {
         event.preventDefault();
         mousePositionRef.current.currentX = event.clientX;
@@ -64,7 +65,7 @@ const HeaderCell: FC<CellComponentProps> = (props) => {
         flexGrow: 0,
         position: 'relative'
     }}>
-        {value}
+        <HeaderCellComponent column={props.column} colIndex={props.colIndex} field={props.column.field} title={props.column.title}/>
         <Vertical ref={handlerRightRef} style={{
             height: '100%',
             position: 'absolute',
@@ -158,6 +159,10 @@ const GridContext = createContext<GridContextProps>({
     onRowResize:noOp
 })
 
+export function DefaultHeaderCellComponent(props:HeaderCellComponentProps) {
+    return <Vertical>{props.title}</Vertical>;
+}
+
 export default function Grid({data, columns}: GridProps) {
 
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>(columns.map((col, index) => [index, col.width])));
@@ -168,7 +173,7 @@ export default function Grid({data, columns}: GridProps) {
         acc[column.field] = column.title;
         return acc;
     }, {})];
-    return <Vertical style={{padding: '1rem', height: '100%', width: '100%'}}>
+    return <Vertical style={{height: '100%', width: '100%'}}>
         {/* we need to convert the columns into one row of data*/}
         <GridContext.Provider value={{
             onCellResize: (index, width) => {
@@ -191,7 +196,7 @@ export default function Grid({data, columns}: GridProps) {
             <Vertical style={{width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
 
                     <Sheet data={headerData}
-                           columns={columns.map<Column>((c: Column, index: number) => ({...c,cellComponent: HeaderCell}))}
+                           columns={columns.map<Column>((c: Column, index: number) => ({...c,cellComponent: CellComponentForHeader}))}
                            $customColWidth={$customColWidth}
                            $scrollLeft={$scrollLeft}
                            showScroller={false}
@@ -199,14 +204,15 @@ export default function Grid({data, columns}: GridProps) {
 
             </Vertical>
         </Horizontal>
-        <Horizontal style={{height: 'calc(100% - 40px)', width: '100%'}}>
+        <Horizontal style={{height: 'calc(100% - 25px)', width: '100%'}}>
             <Vertical style={{flexBasis: FIRST_COLUMN_WIDTH, flexShrink: 0, flexGrow: 0}}>
                 <Sheet data={data.map((d,index)=>({_:''}))}
                        columns={[{
                            field : '_',
                            width : FIRST_COLUMN_WIDTH,
                            title:' ',
-                           cellComponent : RowCellResizer
+                           cellComponent : RowCellResizer,
+                           headerCellComponent : DefaultHeaderCellComponent
                        }]}
                        $customRowHeight={$customRowHeight}
                        $scrollTop={$scrollTop}

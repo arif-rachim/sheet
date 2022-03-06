@@ -1,6 +1,7 @@
 import React, {CSSProperties, ReactElement, useCallback, useEffect, useRef, useState} from "react";
 import {useObserver, useObserverListener} from "react-hook-useobserver";
 import {Observer} from "react-hook-useobserver/lib/useObserver";
+import {Vertical} from "react-hook-components";
 
 interface CalculateBeforeViewPort {
     index: number,
@@ -19,10 +20,18 @@ export interface Column {
     field: string,
     width: number,
     title: string,
-    cellComponent : React.FC<CellComponentProps>
+    cellComponent : React.FC<CellComponentProps>,
+    headerCellComponent? : React.FC<HeaderCellComponentProps>
 }
 
-export const CellComponentString : React.FC<CellComponentProps> = ({value}) => <div style={{padding:'0 5px'}}>{value}</div>
+export interface HeaderCellComponentProps{
+    field : string,
+    title: string,
+    column: Column,
+    colIndex: number,
+}
+
+export const CellComponentString : React.FC<CellComponentProps> = ({value}) => <Vertical style={{padding:'0 5px'}}>{value}</Vertical>
 
 type ScrollListener = (event: { scrollLeft: number, scrollTop: number, viewportWidth: number, viewportHeight: number }) => void;
 const BORDER = '1px solid rgba(0,0,0,0.1)';
@@ -155,12 +164,13 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
                     width: '100%',
                     height: '100%',
                     overflow: props.showScroller === false ? 'hidden' : 'auto',
-                    boxSizing: 'border-box', ...props.styleContainer
+                    boxSizing:'border-box',
+                    ...props.styleContainer
                 }} onScroll={handleScroller}>
         <div style={{
             width: $totalWidthOfContent.current,
             height: $totalHeightOfContent.current,
-            boxSizing: 'border-box',
+            boxSizing:'border-box',
             backgroundColor: '#dddddd',
             position: 'relative', ...props.styleViewPort
         }}>
