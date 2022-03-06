@@ -19,9 +19,7 @@ interface CalculateInsideViewPort {
 export interface Column {
     field: string,
     width: number,
-    title: string,
-    cellComponent : React.FC<CellComponentProps>,
-    headerCellComponent? : React.FC<HeaderCellComponentProps>
+    cellComponent? : React.FC<CellComponentProps>,
 }
 
 export interface HeaderCellComponentProps{
@@ -31,7 +29,6 @@ export interface HeaderCellComponentProps{
     colIndex: number,
 }
 
-export const CellComponentString : React.FC<CellComponentProps> = ({value}) => <Vertical style={{padding:'0 5px'}}>{value}</Vertical>
 
 type ScrollListener = (event: { scrollLeft: number, scrollTop: number, viewportWidth: number, viewportHeight: number }) => void;
 const BORDER = '1px solid rgba(0,0,0,0.1)';
@@ -94,8 +91,12 @@ interface RenderComponentProps {
 }
 
 const defaultDom = document.createElement('div');
+const DefaultCellComponent : React.FC<CellComponentProps> = ({value}) => <Vertical style={{padding:'0 5px'}}>{value}</Vertical>
 
 export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
+    const [$reRender,setReRender] = useObserver(new Date());
+    const forceUpdate = useCallback(() => setReRender(new Date()),[]);
+    useEffect(() => forceUpdate(),[props.data]);
     const {$customColWidth, $customRowHeight} = props;
     const [$defaultRowHeight,] = useObserver(props.defaultRowHeight || DEFAULT_HEIGHT);
     const [$defaultColWidth,] = useObserver(props.defaultColWidth ||  DEFAULT_WIDTH);
@@ -125,7 +126,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
         setViewPortDimension({width: offsetWidth, height: offsetHeight});
     }, []);
 
-    useObserverListener([$viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight||$emptyMapObserver, $customColWidth||$emptyMapObserver], () => {
+    useObserverListener([$reRender,$viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight||$emptyMapObserver, $customColWidth||$emptyMapObserver], () => {
 
         const scrollerPosition = $scrollerPosition.current;
         const defaultRowHeight = $defaultRowHeight.current;
@@ -227,7 +228,7 @@ function calculateLength(customLength: Map<number, number> = new Map<number, num
 }
 
 const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) {
-    const CellComponent = props.column.cellComponent;
+    const CellComponent = props.column.cellComponent || DefaultCellComponent;
     return <div
         style={{
             position: 'absolute',
@@ -265,6 +266,7 @@ function renderComponent({
                              data,
                              columns
                          }: RenderComponentProps): void {
+
     const {
         lengths: heightsOfRowInsideViewPort
     } = numberOfRowInsideViewPort;

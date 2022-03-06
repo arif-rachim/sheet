@@ -1,5 +1,5 @@
-import {CellComponentString, Column} from "./sheet/Sheet";
-import {DefaultHeaderCellComponent} from "./sheet/Grid";
+import {Column} from "./sheet/Sheet";
+import {GridColumn} from "./sheet/Grid";
 
 interface RandomDataResult{
     data:Array<any>,
@@ -8,13 +8,11 @@ interface RandomDataResult{
 export function generateRandomData(){
     const numberOfColumns = 50;
     const numberOfRecords = 200;
-    const columns:Array<Column> = Array.from({length:numberOfColumns}).map<Column>((_,columnIndex) => {
+    const columns:Array<GridColumn> = Array.from({length:numberOfColumns}).map<GridColumn>((_,columnIndex) => {
         return {
             field:pad('000',columnIndex.toString()),
             width:100,
-            title:pad('00000000',columnIndex.toString()),
-            cellComponent : CellComponentString,
-            headerCellComponent : DefaultHeaderCellComponent
+            title:pad('00000000',columnIndex.toString())
         }
     });
     const data:Array<any> = Array.from({length:numberOfRecords}).map<any>((_,rIndex) => {

@@ -1,0 +1,11 @@
+.handler:hover{
+    opacity: 1;
+}
+.handler{
+    opacity: 0;
+}
+
+.filterInput:focus{
+    outline: none;
+    background-color: yellow;
+}
