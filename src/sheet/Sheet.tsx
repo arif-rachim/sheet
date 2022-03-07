@@ -91,7 +91,7 @@ interface RenderComponentProps {
 }
 
 const defaultDom = document.createElement('div');
-const DefaultCellComponent : React.FC<CellComponentProps> = ({value}) => <Vertical style={{padding:'0 5px'}}>{value}</Vertical>
+const DefaultCellComponent : React.FC<CellComponentProps> = ({value,rowIndex}) => <Vertical style={{padding:'0 5px',backgroundColor:(rowIndex % 2)?'#eee':'#fff',height:'100%'}} vAlign={'center'}>{value}</Vertical>
 
 export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     const [$reRender,setReRender] = useObserver(new Date());
@@ -172,7 +172,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
             width: $totalWidthOfContent.current,
             height: $totalHeightOfContent.current,
             boxSizing:'border-box',
-            backgroundColor: '#dddddd',
+            backgroundColor: '#f6f6f6',
             position: 'relative', ...props.styleViewPort
         }}>
             {elements}

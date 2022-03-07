@@ -1,17 +1,19 @@
 import {Horizontal, Vertical} from "react-hook-components";
 import Sheet, {CellComponentProps, Column, HeaderCellComponentProps} from "./Sheet";
-import {ObserverValue, useObserver, useObserverValue} from "react-hook-useobserver";
+import {ObserverValue, useObserver, useObserverListener, useObserverValue} from "react-hook-useobserver";
 import React, {
     createContext,
     FC,
     MouseEvent as ReactMouseEvent,
     useCallback,
     useContext,
-    useEffect, useMemo,
+    useEffect,
+    useMemo,
     useRef
 } from "react";
 import classes from "./Grid.module.css";
 import {Observer} from "react-hook-useobserver/lib/useObserver";
+import {IoArrowDown, IoArrowUp} from "react-icons/io5";
 
 interface GridProps {
     data: Array<any>,
@@ -25,9 +27,9 @@ export interface GridColumn extends Column {
     filterCellComponent?: React.FC<HeaderCellComponentProps>
 }
 
-const FIRST_COLUMN_WIDTH = 10;
+const FIRST_COLUMN_WIDTH = 20;
 const HANDLER_LENGTH = 7;
-
+const HEADER_HEIGHT = 50;
 
 const CellComponentForHeader: FC<CellComponentProps> = (props) => {
     const index = props.colIndex;
@@ -143,7 +145,6 @@ const RowCellResizer: React.FC<CellComponentProps> = (props: CellComponentProps)
     }, []);
     return <Vertical ref={containerRef} style={{
         padding: '3px 5px',
-        borderRight: '1px solid #CCC',
         width: '100%',
         height: '100%',
         boxSizing: 'border-box',
@@ -159,19 +160,26 @@ const RowCellResizer: React.FC<CellComponentProps> = (props: CellComponentProps)
             zIndex: 1,
             left: 0,
             boxSizing: 'border-box',
-            cursor: 'col-resize'
-        }} onMouseDown={handleDrag}/>
+            cursor: 'pointer'
+        }} onMouseDown={handleDrag} className={classes.handler}/>
     </Vertical>
 }
 
 const defaultDif = document.createElement('div');
+
+interface GridSortItem {
+    field: string,
+    direction: 'ASC' | 'DESC' | ''
+}
 
 interface GridContextProps {
     onCellResize: (colIndex: number, width: number) => void,
     onRowResize: (colIndex: number, height: number) => void,
     setGridFilter: (value: any) => any,
     $gridFilter?: Observer<any>,
-    onFilterChange: () => void
+    onFilterChange: () => void,
+    setGridSort?: (value: (oldVal: Array<GridSortItem>) => Array<GridSortItem>) => void,
+    $gridSort?: Observer<Array<GridSortItem>>
 }
 
 function noOp() {
@@ -181,15 +189,64 @@ const GridContext = createContext<GridContextProps>({
     onCellResize: noOp,
     onRowResize: noOp,
     setGridFilter: noOp,
-    onFilterChange: noOp
+    onFilterChange: noOp,
 })
+
+const SORT_DIRECTION = {
+    ASC: 'ASC',
+    DESC: 'DESC'
+}
+
+function SortComponent({field}: { field: string }) {
+    const {$gridSort} = useContext(GridContext);
+    const [$defaultSort] = useObserver([]);
+    const direction = useObserverValue($gridSort || $defaultSort, (gridSort: Array<GridSortItem>) => {
+        const sort = gridSort.find(sort => sort.field === field);
+        return sort?.direction;
+    });
+    return <Vertical style={{flexShrink: 0, flexGrow: 0, marginLeft: 5}}>
+        {direction === SORT_DIRECTION.ASC && <IoArrowUp/>}
+        {direction === SORT_DIRECTION.DESC && <IoArrowDown/>}
+    </Vertical>;
+}
 
 export function DefaultHeaderCellComponent(props: HeaderCellComponentProps) {
     const column: any = props.column;
     const gridColumn: GridColumn = column;
     const FilterCellComponent: React.FC<HeaderCellComponentProps> = gridColumn.filterCellComponent || DefaultFilterCellComponent;
+    const {setGridSort} = useContext(GridContext);
+
+    function handleSortClicked() {
+        if (!setGridSort) {
+            return;
+        }
+        setGridSort((oldVal: Array<GridSortItem>) => {
+            // lets find old val index
+            const oldField = oldVal.find(s => s.field === gridColumn.field);
+            if(oldField){
+
+                const isAsc = oldField.direction === SORT_DIRECTION.ASC;
+                if(isAsc){
+                    const newItem:GridSortItem = {field:gridColumn.field,direction:"DESC"};
+                    return [...oldVal.filter(s => s.field !== gridColumn.field),newItem];
+                } else{
+                    return oldVal.filter(s => s.field !== gridColumn.field);
+                }
+            }else{
+                return [...oldVal,{field:gridColumn.field,direction:'ASC'}];
+            }
+
+        });
+    }
+
     return <Vertical style={{height: '100%'}}>
-        <Vertical style={{flexGrow: 1, padding: '0px 5px'}} vAlign={'center'}>{props.title}</Vertical>
+        <Horizontal style={{flexGrow: 1, padding: '0px 5px', backgroundColor: '#eee', color: '#333'}} vAlign={'center'}
+                    onClick={handleSortClicked}>
+            <Vertical>
+                {props.title}
+            </Vertical>
+            <SortComponent field={gridColumn.field}/>
+        </Horizontal>
         <FilterCellComponent title={props.title} field={props.field} colIndex={props.colIndex} column={gridColumn}/>
     </Vertical>;
 }
@@ -198,7 +255,7 @@ function DefaultFilterCellComponent(props: HeaderCellComponentProps) {
     const {$gridFilter, setGridFilter, onFilterChange} = useContext(GridContext);
     const [$empty] = useObserver({});
     const value = useObserverValue($gridFilter || $empty, (value: any) => value[props.field] || '');
-    return <Vertical>
+    return <Vertical style={{borderTop: '1px solid #ddd'}}>
         <input type="text" value={value} style={{border: 'none', borderRadius: 0, padding: '2px 5px'}}
                className={classes.filterInput} onChange={(event) => {
             setGridFilter((oldVal: any) => {
@@ -217,25 +274,26 @@ function DefaultFilterCellComponent(props: HeaderCellComponentProps) {
     </Vertical>
 }
 
-export default function Grid({data:dataSource, columns, onFilterChange}: GridProps) {
-    const [$data,setData] = useObserver(dataSource);
+export default function Grid({data: dataSource, columns, onFilterChange}: GridProps) {
+    const [$data, setData] = useObserver(dataSource);
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>(columns.map((col, index) => [index, col.width])));
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
     const [$scrollLeft, setScrollLeft] = useObserver(0);
     const [$scrollTop, setScrollTop] = useObserver(0);
     const [$gridFilter, setGridFilter] = useObserver({});
+    const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
     const headerData = [columns.reduce((acc: any, column: GridColumn, index: number) => {
         acc[column.field] = column.title;
         return acc;
     }, {})];
+
     const firstColData: GridColumn = {
         field: '_',
         width: FIRST_COLUMN_WIDTH,
         title: ' ',
-        cellComponent: RowCellResizer,
-        headerCellComponent: DefaultHeaderCellComponent
+        cellComponent: RowCellResizer
     };
-    const dataForColumnResizer = useMemo(() => dataSource.map((d, index) => ({_: ''})),[]);
+    const dataForColumnResizer = useMemo(() => dataSource.map((d, index) => ({_: ''})), []);
     return <Vertical style={{height: '100%', width: '100%'}}>
         <GridContext.Provider value={{
             onCellResize: (index, width) => {
@@ -252,24 +310,24 @@ export default function Grid({data:dataSource, columns, onFilterChange}: GridPro
                     return newVal;
                 });
             },
-            setGridFilter,
-            $gridFilter,
+            $gridFilter, setGridFilter,
+            $gridSort, setGridSort,
             onFilterChange: () => {
                 // we need to inform the outside that filter has changed !
                 // if user has implement onFilterChange, then the filter will be their responsibility,
                 // however if the user does not implement onFilterChange, then it will be grid responsibility
                 // to perform local filtering
 
-                if (onFilterChange){
+                if (onFilterChange) {
                     onFilterChange($gridFilter.current)
-                }else{
+                } else {
                     // this is our logic to perform filtering
                     const filteredData = dataSource.filter(data => {
-                        return Object.keys($gridFilter.current).reduce((accumulator:boolean,key:string) => {
-                            const gridFilter:any = $gridFilter.current;
+                        return Object.keys($gridFilter.current).reduce((accumulator: boolean, key: string) => {
+                            const gridFilter: any = $gridFilter.current;
                             const value = gridFilter[key].toString().toUpperCase();
                             return (data[key].toString().toUpperCase().indexOf(value) >= 0) && accumulator;
-                        },true);
+                        }, true);
                     })
 
                     setData(filteredData);
@@ -277,7 +335,13 @@ export default function Grid({data:dataSource, columns, onFilterChange}: GridPro
             }
         }}>
             <Horizontal>
-                <Vertical style={{flexBasis: FIRST_COLUMN_WIDTH, flexShrink: 0, flexGrow: 0}}/>
+                <Vertical style={{
+                    flexBasis: FIRST_COLUMN_WIDTH,
+                    flexShrink: 0,
+                    flexGrow: 0,
+                    borderRight: '1px solid #ddd',
+                    borderBottom: '1px solid #ddd'
+                }}/>
                 <Vertical style={{width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
 
                     <Sheet data={headerData}
@@ -288,12 +352,12 @@ export default function Grid({data:dataSource, columns, onFilterChange}: GridPro
                            $customColWidth={$customColWidth}
                            $scrollLeft={$scrollLeft}
                            showScroller={false}
-                           defaultRowHeight={50}
+                           defaultRowHeight={HEADER_HEIGHT}
                     />
 
                 </Vertical>
             </Horizontal>
-            <Horizontal style={{height: 'calc(100% - 25px)', width: '100%'}}>
+            <Horizontal style={{height: `calc(100% - ${HEADER_HEIGHT}px)`, width: '100%'}}>
                 <Vertical style={{flexBasis: FIRST_COLUMN_WIDTH, flexShrink: 0, flexGrow: 0}}>
                     <Sheet data={dataForColumnResizer}
                            columns={[firstColData]}

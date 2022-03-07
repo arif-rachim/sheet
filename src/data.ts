@@ -6,8 +6,8 @@ interface RandomDataResult{
     columns:Array<any>
 }
 export function generateRandomData(){
-    const numberOfColumns = 50;
-    const numberOfRecords = 200;
+    const numberOfColumns = 10;
+    const numberOfRecords = 1000000;
     const columns:Array<GridColumn> = Array.from({length:numberOfColumns}).map<GridColumn>((_,columnIndex) => {
         return {
             field:pad('000',columnIndex.toString()),
