@@ -1,5 +1,10 @@
 import {Horizontal, Vertical} from "react-hook-components";
-import Sheet, {CellComponentProps, Column, HeaderCellComponentProps} from "./Sheet";
+import Sheet, {
+    CellComponentProps,
+    Column,
+    dataItemToValueDefaultImplementation,
+    HeaderCellComponentProps
+} from "./Sheet";
 import {ObserverValue, useObserver, useObserverValue} from "react-hook-useobserver";
 import React, {
     createContext,
@@ -19,7 +24,9 @@ import {useObserverListener} from "react-hook-useobserver/lib";
 interface GridProps {
     data: Array<any>,
     columns: Array<GridColumn>,
-    onFilterChange?: (filterValue: any) => void
+    onFilterChange?: (filterValue: any) => void,
+    defaultRowHeight? : number,
+    defaultColWidth? : number
 }
 
 export interface GridColumn extends Column {
@@ -261,7 +268,8 @@ function CellComponentForColumnHeaderFilter(props: HeaderCellComponentProps) {
     </Vertical>
 }
 
-function compareValue(prev: any, next: any,gridSort:Array<GridSortItem>,index:number):number {
+function compareValue(props:{prev: any, next: any,gridSort:Array<GridSortItem>,index:number,columns:Array<GridColumn>,dataSource:Array<any>}):number {
+    const {prev, next,gridSort,index} = props;
     if(index >= gridSort.length){
         return 0;
     }
@@ -269,20 +277,25 @@ function compareValue(prev: any, next: any,gridSort:Array<GridSortItem>,index:nu
     const {field,direction} = gridSort[index];
     const isAsc = direction === 'ASC';
     const isDesc = direction === 'DESC';
-    const prevValue = prev[field];
-    const nextValue = next[field];
+    const columns = props.columns;
+    const colIndex = columns.findIndex(col => col.field === field);
+    const column = columns[colIndex];
+    const dataSource = props.dataSource;
+    const dataItemToLabel = column.dataItemToValue || dataItemToValueDefaultImplementation;
+    const prevValue = dataItemToLabel({dataItem:prev,column,colIndex,rowIndex:dataSource.indexOf(prev),dataSource});
+    const nextValue = dataItemToLabel({dataItem:next,column,colIndex,rowIndex:dataSource.indexOf(next),dataSource});
     if (typeof prevValue === 'string' && typeof nextValue === 'string') {
         const prevLowerCase = prevValue.toLowerCase();
         const nextLowerCase = nextValue.toLowerCase();
         if(prevLowerCase === nextLowerCase){
-            return compareValue(prev,next,gridSort,index+1);
+            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
         }
         const val = prevLowerCase > nextLowerCase ? 1 : -1;
         return isAsc ? val : isDesc ? -val : 0
     }
     if (typeof prevValue === 'number' && typeof nextValue === 'number') {
         if(prevValue === nextValue){
-            return compareValue(prev,next,gridSort,index+1);
+            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
         }
         const val = prevValue - nextValue;
         return isAsc ? val : isDesc ? -val : 0;
@@ -291,7 +304,7 @@ function compareValue(prev: any, next: any,gridSort:Array<GridSortItem>,index:nu
         const prevValueTime = prevValue.getTime();
         const nextValueTime = nextValue.getTime();
         if(prevValue === nextValue){
-            return compareValue(prev,next,gridSort,index+1);
+            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
         }
         const val = prevValueTime - nextValueTime;
         return isAsc ? val : isDesc ? -val : 0;
@@ -299,7 +312,7 @@ function compareValue(prev: any, next: any,gridSort:Array<GridSortItem>,index:nu
     }
     if (typeof prevValue === 'boolean' && typeof nextValue === 'boolean') {
         if(prevValue === nextValue){
-            return compareValue(prev,next,gridSort,index+1);
+            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
         }
         const val = prevValue ? 1 : -1;
         return isAsc ? val : isDesc ? -val : 0;
@@ -307,7 +320,7 @@ function compareValue(prev: any, next: any,gridSort:Array<GridSortItem>,index:nu
     return 0;
 }
 
-export default function Grid({data: dataSource, columns, onFilterChange}: GridProps) {
+export default function Grid({data: dataSource, columns, onFilterChange,defaultRowHeight,defaultColWidth}: GridProps) {
     const [$data, setData] = useObserver(dataSource);
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>(columns.map((col, index) => [index, col.width])));
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
@@ -332,7 +345,7 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
     useObserverListener($gridSort, () => {
         const gridSort: Array<GridSortItem> = $gridSort.current;
         const clonedData = [...dataSource];
-        clonedData.sort((prev:any,next:any) => compareValue(prev, next,gridSort,0))
+        clonedData.sort((prev:any,next:any) => compareValue({prev,next,gridSort,index:0,columns,dataSource}))
         setData(clonedData);
     });
 
@@ -364,11 +377,15 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                     onFilterChange($gridFilter.current)
                 } else {
                     // this is our logic to perform filtering
-                    const filteredData = dataSource.filter(data => {
+                    const filteredData = dataSource.filter((data,rowIndex) => {
                         return Object.keys($gridFilter.current).reduce((accumulator: boolean, key: string) => {
                             const gridFilter: any = $gridFilter.current;
-                            const value = gridFilter[key].toString().toUpperCase();
-                            return (data[key].toString().toUpperCase().indexOf(value) >= 0) && accumulator;
+                            const colIndex = columns.findIndex(col => col.field === key);
+                            const column = columns[colIndex];
+                            const dataItemToValue = column?.dataItemToValue || dataItemToValueDefaultImplementation;
+                            const filterValue = gridFilter[key].toString().toUpperCase();
+                            const value = (dataItemToValue({dataItem:data,dataSource,column,colIndex,rowIndex}) || '').toUpperCase();
+                            return (value.indexOf(filterValue) >= 0) && accumulator;
                         }, true);
                     });
 
@@ -395,6 +412,7 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                            $scrollLeft={$scrollLeft}
                            showScroller={false}
                            defaultRowHeight={HEADER_HEIGHT}
+                           defaultColWidth={defaultColWidth}
                     />
 
                 </Vertical>
@@ -407,6 +425,7 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                            $scrollTop={$scrollTop}
                            showScroller={false}
                            defaultColWidth={FIRST_COLUMN_WIDTH}
+                           defaultRowHeight={defaultRowHeight}
                     />
                 </Vertical>
                 <Vertical style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
@@ -420,6 +439,8 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                                           setScrollLeft(scrollLeft);
                                           setScrollTop(scrollTop);
                                       }}
+                                      defaultColWidth={defaultColWidth}
+                                      defaultRowHeight={defaultRowHeight}
                         />
                     }}/>
                 </Vertical>

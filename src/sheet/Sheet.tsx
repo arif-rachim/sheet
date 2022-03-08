@@ -24,8 +24,9 @@ interface CalculateInsideViewPort {
 export interface Column {
     field: string,
     width: number,
-    cellComponent?: React.FC<CellComponentProps>,
-    cellStyleFunction?: (props: CellComponentProps) => CSSProperties
+    cellComponent?: React.FC<CellComponentStyledProps>,
+    cellStyleFunction?: (props: CellComponentProps) => CSSProperties,
+    dataItemToValue?: (props:DataItemToValueProps) => string
 }
 
 export interface HeaderCellComponentProps {
@@ -51,13 +52,16 @@ interface SheetProperties<DataItem> {
 
 }
 
-export interface CellComponentProps {
+interface DataItemToValueProps{
     dataSource: Array<any>,
     dataItem: any,
-    value: any,
     column: Column,
     rowIndex: number,
     colIndex: number,
+}
+
+export interface CellComponentProps extends DataItemToValueProps{
+    value: any
 }
 
 interface CellRendererProps extends CellComponentProps {
@@ -66,6 +70,10 @@ interface CellRendererProps extends CellComponentProps {
     top: number,
     left: number,
     style?: CSSProperties,
+}
+
+export interface CellComponentStyledProps extends CellComponentProps{
+    cellStyle:CSSProperties
 }
 
 interface RowAccumulator {
@@ -91,10 +99,8 @@ interface RenderComponentProps {
 const defaultDom = document.createElement('div');
 type ScrollListener = (event: { scrollLeft: number, scrollTop: number }) => void;
 
-const CellComponentDefaultImplementation: React.FC<CellComponentProps> = (props) => {
-    const {value, column} = props;
-    const cellStyleFunction = column.cellStyleFunction || cellStyleFunctionDefaultImplementation;
-    return <Vertical style={cellStyleFunction(props)} vAlign={'center'}>{value}</Vertical>
+const CellComponentDefaultImplementation: React.FC<CellComponentStyledProps> = (props) => {
+    return <Vertical style={props.cellStyle} vAlign={'center'}>{props.value}</Vertical>
 };
 
 function cellStyleFunctionDefaultImplementation(props: CellComponentProps): CSSProperties {
@@ -244,8 +250,10 @@ function calculateLength(customLength: Map<number, number> = new Map<number, num
     const totalDefaultLength = (data.length - customLengthKeys.length) * defaultLength;
     return totalDefaultLength + totalCustomLength;
 }
-
 const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) {
+
+    const cellStyleFunction = props.column.cellStyleFunction || cellStyleFunctionDefaultImplementation;
+    const cellStyle = cellStyleFunction(props);
     const CellComponent = props.column.cellComponent || CellComponentDefaultImplementation;
     return <div
         style={{
@@ -269,6 +277,7 @@ const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) 
             dataSource={props.dataSource}
             rowIndex={props.rowIndex}
             colIndex={props.colIndex}
+            cellStyle={cellStyle}
         />
 
     </div>
@@ -300,7 +309,8 @@ function renderComponent({
             const colWidth = widthsOfColInsideViewPort.get(colIndex) || 0;
             const column = columns[colIndex];
             const dataItem = data[rowIndex];
-            const value = dataItem[column.field];
+            const dataItemToValue = column.dataItemToValue || dataItemToValueDefaultImplementation;
+            const value = dataItemToValue({dataItem,column,colIndex,dataSource:data,rowIndex});
             colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex}
                                                top={acc.top}
                                                width={colWidth}
@@ -308,7 +318,7 @@ function renderComponent({
                                                dataItem={dataItem}
                                                value={value}
                                                column={column}
-                                               left={colAcc.left} height={rowHeight}/>);
+                                               left={colAcc.left} height={rowHeight} />);
             colAcc.left = colAcc.left + colWidth;
             return colAcc;
         }, {elements: [], left: totalWidthBeforeViewPort});
@@ -318,4 +328,9 @@ function renderComponent({
         return acc;
     }, {elements: [], top: totalHeightBeforeViewPort});
     setElements(elements);
+}
+
+export function dataItemToValueDefaultImplementation(props:DataItemToValueProps){
+    const value = props.dataItem[props.column.field];
+    return value?.toString()
 }
