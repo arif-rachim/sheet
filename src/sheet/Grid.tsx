@@ -1,6 +1,6 @@
 import {Horizontal, Vertical} from "react-hook-components";
 import Sheet, {CellComponentProps, Column, HeaderCellComponentProps} from "./Sheet";
-import {ObserverValue, useObserver, useObserverListener, useObserverValue} from "react-hook-useobserver";
+import {ObserverValue, useObserver, useObserverValue} from "react-hook-useobserver";
 import React, {
     createContext,
     FC,
@@ -14,6 +14,7 @@ import React, {
 import classes from "./Grid.module.css";
 import {Observer} from "react-hook-useobserver/lib/useObserver";
 import {IoArrowDown, IoArrowUp} from "react-icons/io5";
+import {useObserverListener} from "react-hook-useobserver/lib";
 
 interface GridProps {
     data: Array<any>,
@@ -31,51 +32,18 @@ const FIRST_COLUMN_WIDTH = 20;
 const HANDLER_LENGTH = 7;
 const HEADER_HEIGHT = 50;
 
-const CellComponentForHeader: FC<CellComponentProps> = (props) => {
+const CellComponentForColumnHeaderBase: FC<CellComponentProps> = (props) => {
     const index = props.colIndex;
-    const mousePositionRef = useRef({currentX: 0, nextX: 0, dragActive: false});
-    const handlerRightRef = useRef(defaultDif);
+    const handlerRef = useRef(defaultDif);
     const containerRef = useRef(defaultDif);
     const {onCellResize} = useContext(GridContext);
     const column: any = props.column;
     const gridColumn: GridColumn = column;
-
-    const HeaderCellComponent = gridColumn.headerCellComponent || DefaultHeaderCellComponent;
-    const handleDrag = useCallback((event: ReactMouseEvent<HTMLDivElement, MouseEvent>) => {
-        event.preventDefault();
-        mousePositionRef.current.currentX = event.clientX;
-        mousePositionRef.current.dragActive = true;
-        let cellWidth = 0;
-
-        function closeDragElement() {
-            mousePositionRef.current.dragActive = false;
-            document.removeEventListener('mouseup', closeDragElement);
-            document.removeEventListener('mousemove', onElementDrag);
-            onCellResize(index, cellWidth + (Math.ceil(0.5 * HANDLER_LENGTH)));
-        }
-
-        function onElementDrag(event: MouseEvent) {
-            event.preventDefault();
-            if (!mousePositionRef.current.dragActive) {
-                return;
-            }
-
-            if (event.clientX <= containerRef.current.getBoundingClientRect().x) {
-                return;
-            }
-            mousePositionRef.current.nextX = mousePositionRef.current.currentX - event.clientX;
-            mousePositionRef.current.currentX = event.clientX;
-            cellWidth = (handlerRightRef.current.offsetLeft - mousePositionRef.current.nextX);
-            handlerRightRef.current.style.left = cellWidth + 'px';
-
-        }
-
-        document.addEventListener('mouseup', closeDragElement);
-        document.addEventListener('mousemove', onElementDrag);
-
-    }, []);
+    const CellComponentForColHeader = gridColumn.headerCellComponent || CellComponentForColumnHeader;
+    const mousePositionRef = useRef({current: 0, next: 0, dragActive: false});
+    const handleDrag = useCallback(dragListener(mousePositionRef, onCellResize, index, containerRef, handlerRef, "horizontal"), []);
     useEffect(() => {
-        handlerRightRef.current.style.left = `${containerRef.current.getBoundingClientRect().width - Math.ceil(0.5 * HANDLER_LENGTH)}px`;
+        handlerRef.current.style.left = `${containerRef.current.getBoundingClientRect().width - Math.ceil(0.5 * HANDLER_LENGTH)}px`;
     }, []);
     return <Vertical ref={containerRef} style={{
         padding: '0px 0px',
@@ -86,9 +54,9 @@ const CellComponentForHeader: FC<CellComponentProps> = (props) => {
         flexGrow: 0,
         position: 'relative'
     }}>
-        <HeaderCellComponent column={gridColumn} colIndex={props.colIndex} field={gridColumn.field}
-                             title={gridColumn.title}/>
-        <Vertical ref={handlerRightRef} style={{
+        <CellComponentForColHeader column={gridColumn} colIndex={props.colIndex} field={gridColumn.field}
+                                   title={gridColumn.title}/>
+        <Vertical ref={handlerRef} style={{
             height: '100%',
             position: 'absolute',
             backgroundColor: 'rgba(0,0,0,0.5)',
@@ -99,47 +67,16 @@ const CellComponentForHeader: FC<CellComponentProps> = (props) => {
             cursor: 'col-resize'
         }} onMouseDown={handleDrag} className={classes.handler}/>
     </Vertical>;
-}
+};
 
-const RowCellResizer: React.FC<CellComponentProps> = (props: CellComponentProps) => {
+const CellComponentToResizeRow: React.FC<CellComponentProps> = (props: CellComponentProps) => {
     const index = props.rowIndex;
     const containerRef = useRef(defaultDif);
     const handlerBottomRef = useRef(defaultDif);
-    const mousePositionRef = useRef({currentY: 0, nextY: 0, dragActive: false});
+
     const {onRowResize} = useContext(GridContext);
-    const handleDrag = useCallback((event: ReactMouseEvent<HTMLDivElement, MouseEvent>) => {
-        event.preventDefault();
-        mousePositionRef.current.currentY = event.clientY;
-        mousePositionRef.current.dragActive = true;
-        let cellHeight = 0;
-
-        function closeDragElement() {
-            mousePositionRef.current.dragActive = false;
-            document.removeEventListener('mouseup', closeDragElement);
-            document.removeEventListener('mousemove', onElementDrag);
-            onRowResize(index, cellHeight + (Math.ceil(0.5 * HANDLER_LENGTH)));
-        }
-
-        function onElementDrag(event: MouseEvent) {
-            event.preventDefault();
-            if (!mousePositionRef.current.dragActive) {
-                return;
-            }
-
-            if (event.clientY <= containerRef.current.getBoundingClientRect().y) {
-                return;
-            }
-            mousePositionRef.current.nextY = mousePositionRef.current.currentY - event.clientY;
-            mousePositionRef.current.currentY = event.clientY;
-            cellHeight = (handlerBottomRef.current.offsetTop - mousePositionRef.current.nextY);
-            handlerBottomRef.current.style.top = cellHeight + 'px';
-
-        }
-
-        document.addEventListener('mouseup', closeDragElement);
-        document.addEventListener('mousemove', onElementDrag);
-
-    }, []);
+    const mousePositionRef = useRef({current: 0, next: 0, dragActive: false});
+    const handleDrag = useCallback(dragListener(mousePositionRef, onRowResize, index, containerRef, handlerBottomRef, "vertical"), []);
     useEffect(() => {
         handlerBottomRef.current.style.top = `${containerRef.current.getBoundingClientRect().height - Math.ceil(0.5 * HANDLER_LENGTH)}px`;
     }, []);
@@ -163,7 +100,57 @@ const RowCellResizer: React.FC<CellComponentProps> = (props: CellComponentProps)
             cursor: 'pointer'
         }} onMouseDown={handleDrag} className={classes.handler}/>
     </Vertical>
+};
+
+function dragListener(mousePositionRef: React.MutableRefObject<{ current: number; next: number; dragActive: boolean }>, onResize: (colIndex: number, height: number) => void, index: number, containerRef: React.MutableRefObject<HTMLDivElement>, handlerRef: React.MutableRefObject<HTMLDivElement>, dragDirection: 'vertical' | 'horizontal' = 'vertical') {
+    return (event: ReactMouseEvent<HTMLDivElement, MouseEvent>) => {
+
+        event.preventDefault();
+        const isVertical = dragDirection === 'vertical';
+        if (isVertical) {
+            mousePositionRef.current.current = event.clientY;
+        } else {
+            mousePositionRef.current.current = event.clientX;
+        }
+
+        mousePositionRef.current.dragActive = true;
+        let cellHeight = 0;
+
+        function closeDragElement() {
+            mousePositionRef.current.dragActive = false;
+            document.removeEventListener('mouseup', closeDragElement);
+            document.removeEventListener('mousemove', onElementDrag);
+            onResize(index, cellHeight + (Math.ceil(0.5 * HANDLER_LENGTH)));
+        }
+
+        function onElementDrag(event: MouseEvent) {
+            event.preventDefault();
+            if (!mousePositionRef.current.dragActive) {
+                return;
+            }
+
+            if (isVertical && (event.clientY <= containerRef.current.getBoundingClientRect().y)) {
+                return;
+            }
+            if ((!isVertical) && (event.clientX <= containerRef.current.getBoundingClientRect().x)) {
+                return;
+            }
+
+            mousePositionRef.current.next = mousePositionRef.current.current - (isVertical ? event.clientY : event.clientX);
+            mousePositionRef.current.current = isVertical ? event.clientY : event.clientX;
+            cellHeight = ((isVertical ? handlerRef.current.offsetTop : handlerRef.current.offsetLeft) - mousePositionRef.current.next);
+            if (isVertical) {
+                handlerRef.current.style.top = cellHeight + 'px';
+            } else {
+                handlerRef.current.style.left = cellHeight + 'px';
+            }
+        }
+
+        document.addEventListener('mouseup', closeDragElement);
+        document.addEventListener('mousemove', onElementDrag);
+    };
 }
+
 
 const defaultDif = document.createElement('div');
 
@@ -190,12 +177,12 @@ const GridContext = createContext<GridContextProps>({
     onRowResize: noOp,
     setGridFilter: noOp,
     onFilterChange: noOp,
-})
+});
 
 const SORT_DIRECTION = {
     ASC: 'ASC',
     DESC: 'DESC'
-}
+};
 
 function SortComponent({field}: { field: string }) {
     const {$gridSort} = useContext(GridContext);
@@ -210,10 +197,10 @@ function SortComponent({field}: { field: string }) {
     </Vertical>;
 }
 
-export function DefaultHeaderCellComponent(props: HeaderCellComponentProps) {
+export function CellComponentForColumnHeader(props: HeaderCellComponentProps) {
     const column: any = props.column;
     const gridColumn: GridColumn = column;
-    const FilterCellComponent: React.FC<HeaderCellComponentProps> = gridColumn.filterCellComponent || DefaultFilterCellComponent;
+    const FilterCellComponent: React.FC<HeaderCellComponentProps> = gridColumn.filterCellComponent || CellComponentForColumnHeaderFilter;
     const {setGridSort} = useContext(GridContext);
 
     function handleSortClicked() {
@@ -223,17 +210,17 @@ export function DefaultHeaderCellComponent(props: HeaderCellComponentProps) {
         setGridSort((oldVal: Array<GridSortItem>) => {
             // lets find old val index
             const oldField = oldVal.find(s => s.field === gridColumn.field);
-            if(oldField){
+            if (oldField) {
 
                 const isAsc = oldField.direction === SORT_DIRECTION.ASC;
-                if(isAsc){
-                    const newItem:GridSortItem = {field:gridColumn.field,direction:"DESC"};
-                    return [...oldVal.filter(s => s.field !== gridColumn.field),newItem];
-                } else{
+                if (isAsc) {
+                    const newItem: GridSortItem = {field: gridColumn.field, direction: "DESC"};
+                    return [...oldVal.filter(s => s.field !== gridColumn.field), newItem];
+                } else {
                     return oldVal.filter(s => s.field !== gridColumn.field);
                 }
-            }else{
-                return [...oldVal,{field:gridColumn.field,direction:'ASC'}];
+            } else {
+                return [...oldVal, {field: gridColumn.field, direction: 'ASC'}];
             }
 
         });
@@ -251,7 +238,7 @@ export function DefaultHeaderCellComponent(props: HeaderCellComponentProps) {
     </Vertical>;
 }
 
-function DefaultFilterCellComponent(props: HeaderCellComponentProps) {
+function CellComponentForColumnHeaderFilter(props: HeaderCellComponentProps) {
     const {$gridFilter, setGridFilter, onFilterChange} = useContext(GridContext);
     const [$empty] = useObserver({});
     const value = useObserverValue($gridFilter || $empty, (value: any) => value[props.field] || '');
@@ -274,6 +261,52 @@ function DefaultFilterCellComponent(props: HeaderCellComponentProps) {
     </Vertical>
 }
 
+function compareValue(prev: any, next: any,gridSort:Array<GridSortItem>,index:number):number {
+    if(index >= gridSort.length){
+        return 0;
+    }
+
+    const {field,direction} = gridSort[index];
+    const isAsc = direction === 'ASC';
+    const isDesc = direction === 'DESC';
+    const prevValue = prev[field];
+    const nextValue = next[field];
+    if (typeof prevValue === 'string' && typeof nextValue === 'string') {
+        const prevLowerCase = prevValue.toLowerCase();
+        const nextLowerCase = nextValue.toLowerCase();
+        if(prevLowerCase === nextLowerCase){
+            return compareValue(prev,next,gridSort,index+1);
+        }
+        const val = prevLowerCase > nextLowerCase ? 1 : -1;
+        return isAsc ? val : isDesc ? -val : 0
+    }
+    if (typeof prevValue === 'number' && typeof nextValue === 'number') {
+        if(prevValue === nextValue){
+            return compareValue(prev,next,gridSort,index+1);
+        }
+        const val = prevValue - nextValue;
+        return isAsc ? val : isDesc ? -val : 0;
+    }
+    if (prevValue instanceof Date && nextValue instanceof Date) {
+        const prevValueTime = prevValue.getTime();
+        const nextValueTime = nextValue.getTime();
+        if(prevValue === nextValue){
+            return compareValue(prev,next,gridSort,index+1);
+        }
+        const val = prevValueTime - nextValueTime;
+        return isAsc ? val : isDesc ? -val : 0;
+
+    }
+    if (typeof prevValue === 'boolean' && typeof nextValue === 'boolean') {
+        if(prevValue === nextValue){
+            return compareValue(prev,next,gridSort,index+1);
+        }
+        const val = prevValue ? 1 : -1;
+        return isAsc ? val : isDesc ? -val : 0;
+    }
+    return 0;
+}
+
 export default function Grid({data: dataSource, columns, onFilterChange}: GridProps) {
     const [$data, setData] = useObserver(dataSource);
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>(columns.map((col, index) => [index, col.width])));
@@ -282,18 +315,27 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
     const [$scrollTop, setScrollTop] = useObserver(0);
     const [$gridFilter, setGridFilter] = useObserver({});
     const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
-    const headerData = [columns.reduce((acc: any, column: GridColumn, index: number) => {
+    const headerData = [columns.reduce((acc: any, column: GridColumn) => {
         acc[column.field] = column.title;
         return acc;
     }, {})];
-
-    const firstColData: GridColumn = {
+    useEffect(() => {
+        setData(dataSource);
+    },[dataSource]);
+    const columnDataToResizeRow: GridColumn = {
         field: '_',
         width: FIRST_COLUMN_WIDTH,
         title: ' ',
-        cellComponent: RowCellResizer
+        cellComponent: CellComponentToResizeRow
     };
-    const dataForColumnResizer = useMemo(() => dataSource.map((d, index) => ({_: ''})), []);
+    const sheetDataToResizeRow = useMemo(() => dataSource.map(() => ({_: ''})), [dataSource]);
+    useObserverListener($gridSort, () => {
+        const gridSort: Array<GridSortItem> = $gridSort.current;
+        const clonedData = [...dataSource];
+        clonedData.sort((prev:any,next:any) => compareValue(prev, next,gridSort,0))
+        setData(clonedData);
+    });
+
     return <Vertical style={{height: '100%', width: '100%'}}>
         <GridContext.Provider value={{
             onCellResize: (index, width) => {
@@ -328,7 +370,7 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                             const value = gridFilter[key].toString().toUpperCase();
                             return (data[key].toString().toUpperCase().indexOf(value) >= 0) && accumulator;
                         }, true);
-                    })
+                    });
 
                     setData(filteredData);
                 }
@@ -345,9 +387,9 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                 <Vertical style={{width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
 
                     <Sheet data={headerData}
-                           columns={columns.map<Column>((c: Column, index: number) => ({
+                           columns={columns.map<Column>((c: Column) => ({
                                ...c,
-                               cellComponent: CellComponentForHeader
+                               cellComponent: CellComponentForColumnHeaderBase
                            }))}
                            $customColWidth={$customColWidth}
                            $scrollLeft={$scrollLeft}
@@ -359,8 +401,8 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
             </Horizontal>
             <Horizontal style={{height: `calc(100% - ${HEADER_HEIGHT}px)`, width: '100%'}}>
                 <Vertical style={{flexBasis: FIRST_COLUMN_WIDTH, flexShrink: 0, flexGrow: 0}}>
-                    <Sheet data={dataForColumnResizer}
-                           columns={[firstColData]}
+                    <Sheet data={sheetDataToResizeRow}
+                           columns={[columnDataToResizeRow]}
                            $customRowHeight={$customRowHeight}
                            $scrollTop={$scrollTop}
                            showScroller={false}
@@ -373,6 +415,7 @@ export default function Grid({data: dataSource, columns, onFilterChange}: GridPr
                         return <Sheet data={$data.current} columns={columns}
                                       $customRowHeight={$customRowHeight}
                                       $customColWidth={$customColWidth}
+
                                       onScroll={({scrollLeft, scrollTop}) => {
                                           setScrollLeft(scrollLeft);
                                           setScrollTop(scrollTop);

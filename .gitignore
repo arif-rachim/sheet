@@ -6,3 +6,4 @@ package-lock.json
 /lib/
 /src/__snapshots__/
 /coverage/
+/public/person.json

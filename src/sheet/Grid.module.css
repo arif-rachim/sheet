@@ -1,11 +1,12 @@
-.handler:hover{
+.handler:hover {
     opacity: 1;
 }
-.handler{
+
+.handler {
     opacity: 0;
 }
 
-.filterInput:focus{
+.filterInput:focus {
     outline: none;
     background-color: yellow;
 }

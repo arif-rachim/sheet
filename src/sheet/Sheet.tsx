@@ -3,6 +3,11 @@ import {useObserver, useObserverListener} from "react-hook-useobserver";
 import {Observer} from "react-hook-useobserver/lib/useObserver";
 import {Vertical} from "react-hook-components";
 
+const BORDER = '1px solid rgba(0,0,0,0.1)';
+const DEFAULT_HEIGHT = 25;
+const DEFAULT_WIDTH = 70;
+
+
 interface CalculateBeforeViewPort {
     index: number,
     totalLength: number,
@@ -19,21 +24,16 @@ interface CalculateInsideViewPort {
 export interface Column {
     field: string,
     width: number,
-    cellComponent? : React.FC<CellComponentProps>,
+    cellComponent?: React.FC<CellComponentProps>,
+    cellStyleFunction?: (props: CellComponentProps) => CSSProperties
 }
 
-export interface HeaderCellComponentProps{
-    field : string,
+export interface HeaderCellComponentProps {
+    field: string,
     title: string,
     column: Column,
     colIndex: number,
 }
-
-
-type ScrollListener = (event: { scrollLeft: number, scrollTop: number, viewportWidth: number, viewportHeight: number }) => void;
-const BORDER = '1px solid rgba(0,0,0,0.1)';
-const DEFAULT_HEIGHT = 25;
-const DEFAULT_WIDTH = 70;
 
 interface SheetProperties<DataItem> {
     data: Array<DataItem>,
@@ -43,15 +43,15 @@ interface SheetProperties<DataItem> {
     $customColWidth?: Observer<Map<number, number>>,
     $customRowHeight?: Observer<Map<number, number>>,
     onScroll?: ScrollListener,
-    $scrollLeft? : Observer<number>,
-    $scrollTop? : Observer<number>,
-    showScroller? : boolean,
-    defaultColWidth? : number,
-    defaultRowHeight? : number
-        
+    $scrollLeft?: Observer<number>,
+    $scrollTop?: Observer<number>,
+    showScroller?: boolean,
+    defaultColWidth?: number,
+    defaultRowHeight?: number
+
 }
 
-export interface CellComponentProps{
+export interface CellComponentProps {
     dataSource: Array<any>,
     dataItem: any,
     value: any,
@@ -60,15 +60,13 @@ export interface CellComponentProps{
     colIndex: number,
 }
 
-interface CellRendererProps extends CellComponentProps{
+interface CellRendererProps extends CellComponentProps {
     height: number,
     width: number,
     top: number,
     left: number,
     style?: CSSProperties,
-
 }
-
 
 interface RowAccumulator {
     elements: Array<ReactElement>,
@@ -87,36 +85,58 @@ interface RenderComponentProps {
     numberOfColBeforeViewPort: CalculateBeforeViewPort,
     data: Array<any>,
     columns: Array<Column>,
-    setElements: React.Dispatch<React.SetStateAction<React.ReactElement<any, string | React.JSXElementConstructor<any>>[]>>
+    setElements: React.Dispatch<React.SetStateAction<React.ReactElement[]>>
 }
 
 const defaultDom = document.createElement('div');
-const DefaultCellComponent : React.FC<CellComponentProps> = ({value,rowIndex}) => <Vertical style={{padding:'0 5px',backgroundColor:(rowIndex % 2)?'#eee':'#fff',height:'100%'}} vAlign={'center'}>{value}</Vertical>
+type ScrollListener = (event: { scrollLeft: number, scrollTop: number }) => void;
+
+const CellComponentDefaultImplementation: React.FC<CellComponentProps> = (props) => {
+    const {value, column} = props;
+    const cellStyleFunction = column.cellStyleFunction || cellStyleFunctionDefaultImplementation;
+    return <Vertical style={cellStyleFunction(props)} vAlign={'center'}>{value}</Vertical>
+};
+
+function cellStyleFunctionDefaultImplementation(props: CellComponentProps): CSSProperties {
+    return {
+        padding: '0 5px',
+        backgroundColor: (props.rowIndex % 2) ? '#eee' : '#fff',
+        height: '100%',
+        overflow : 'hidden'
+    }
+}
 
 export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
-    const [$reRender,setReRender] = useObserver(new Date());
-    const forceUpdate = useCallback(() => setReRender(new Date()),[]);
-    useEffect(() => forceUpdate(),[props.data]);
+    const [$reRender, setReRender] = useObserver(new Date());
+    const forceUpdate = useCallback(() => setReRender(new Date()), []);
+    useEffect(() => forceUpdate(), [props.data]);
     const {$customColWidth, $customRowHeight} = props;
     const [$defaultRowHeight,] = useObserver(props.defaultRowHeight || DEFAULT_HEIGHT);
-    const [$defaultColWidth,] = useObserver(props.defaultColWidth ||  DEFAULT_WIDTH);
+    const [$defaultColWidth,] = useObserver(props.defaultColWidth || DEFAULT_WIDTH);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
-    const [$scrollerPosition, setScrollerPosition] = useObserver({left: props.$scrollLeft?.current || 0, top: props.$scrollTop?.current || 0});
+    const [$scrollerPosition, setScrollerPosition] = useObserver({
+        left: props.$scrollLeft?.current || 0,
+        top: props.$scrollTop?.current || 0
+    });
     const [elements, setElements] = useState(new Array<ReactElement>());
     const [$emptyObserver] = useObserver(0);
-    const [$emptyMapObserver] = useObserver(new Map<number,number>());
-    useObserverListener([props.$scrollTop||$emptyObserver,props.$scrollLeft||$emptyObserver],() => {
-        const left = props.$scrollLeft?.current||0;
+    const [$emptyMapObserver] = useObserver(new Map<number, number>());
+    useObserverListener([props.$scrollTop || $emptyObserver, props.$scrollLeft || $emptyObserver], () => {
+        const left = props.$scrollLeft?.current || 0;
         const top = props.$scrollTop?.current || 0;
         viewPortRef.current.scrollLeft = left;
         viewPortRef.current.scrollTop = top;
         setScrollerPosition({left, top})
-    })
+    });
     const [$totalWidthOfContent, setTotalWidthOfContent] = useObserver(calculateLength($customColWidth?.current, props.columns, $defaultColWidth.current));
     useObserverListener($customColWidth || $emptyMapObserver, () => setTotalWidthOfContent(calculateLength($customColWidth?.current, props.columns, $defaultColWidth.current)));
 
     const [$totalHeightOfContent, setTotalHeightOfContent] = useObserver(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current));
     useObserverListener($customRowHeight || $emptyMapObserver, () => setTotalHeightOfContent(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current)));
+
+    useEffect(() => {
+        setTotalHeightOfContent(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current))
+    },[props.data])
 
     const viewPortRef = useRef(defaultDom);
 
@@ -126,7 +146,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
         setViewPortDimension({width: offsetWidth, height: offsetHeight});
     }, []);
 
-    useObserverListener([$reRender,$viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight||$emptyMapObserver, $customColWidth||$emptyMapObserver], () => {
+    useObserverListener([$reRender, $viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight || $emptyMapObserver, $customColWidth || $emptyMapObserver], () => {
 
         const scrollerPosition = $scrollerPosition.current;
         const defaultRowHeight = $defaultRowHeight.current;
@@ -155,9 +175,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
         setScrollerPosition({left: viewPortDom.scrollLeft, top: viewPortDom.scrollTop});
         if (props.onScroll) props.onScroll({
             scrollLeft: viewPortDom.scrollLeft,
-            scrollTop: viewPortDom.scrollTop,
-            viewportHeight: viewPortDom.offsetWidth,
-            viewportWidth: viewPortDom.offsetHeight
+            scrollTop: viewPortDom.scrollTop
         })
     }, []);
     return <div ref={viewPortRef}
@@ -165,13 +183,13 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
                     width: '100%',
                     height: '100%',
                     overflow: props.showScroller === false ? 'hidden' : 'auto',
-                    boxSizing:'border-box',
+                    boxSizing: 'border-box',
                     ...props.styleContainer
                 }} onScroll={handleScroller}>
         <div style={{
             width: $totalWidthOfContent.current,
             height: $totalHeightOfContent.current,
-            boxSizing:'border-box',
+            boxSizing: 'border-box',
             backgroundColor: '#f6f6f6',
             position: 'relative', ...props.styleViewPort
         }}>
@@ -228,7 +246,7 @@ function calculateLength(customLength: Map<number, number> = new Map<number, num
 }
 
 const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) {
-    const CellComponent = props.column.cellComponent || DefaultCellComponent;
+    const CellComponent = props.column.cellComponent || CellComponentDefaultImplementation;
     return <div
         style={{
             position: 'absolute',
@@ -240,8 +258,8 @@ const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) 
             borderRight: BORDER,
             boxSizing: 'border-box',
             overflow: 'visible',
-            display:'flex',
-            flexDirection:'column',
+            display: 'flex',
+            flexDirection: 'column',
             ...props.style
         }}>
         <CellComponent
@@ -267,16 +285,12 @@ function renderComponent({
                              columns
                          }: RenderComponentProps): void {
 
-    const {
-        lengths: heightsOfRowInsideViewPort
-    } = numberOfRowInsideViewPort;
-    const {index: lastRowIndexBeforeViewPort, totalLength: totalHeightBeforeViewPort} = numberOfRowBeforeViewPort;
-
-    const {
-        lengths: widthsOfColInsideViewPort
-    } = numberOfColInsideViewPort;
-    const {index: lastColIndexBeforeViewPort, totalLength: totalWidthBeforeViewPort} = numberOfColBeforeViewPort;
-
+    const heightsOfRowInsideViewPort = numberOfRowInsideViewPort.lengths;
+    const totalHeightBeforeViewPort = numberOfRowBeforeViewPort.totalLength;
+    const lastRowIndexBeforeViewPort = numberOfRowBeforeViewPort.index;
+    const widthsOfColInsideViewPort = numberOfColInsideViewPort.lengths;
+    const lastColIndexBeforeViewPort = numberOfColBeforeViewPort.index;
+    const totalWidthBeforeViewPort = numberOfColBeforeViewPort.totalLength;
 
     const {elements} = Array.from({length: heightsOfRowInsideViewPort.size}).reduce<RowAccumulator>((acc, _, rowIndexInsideViewPort) => {
         const rowIndex = lastRowIndexBeforeViewPort + rowIndexInsideViewPort;
