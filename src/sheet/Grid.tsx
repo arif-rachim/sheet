@@ -25,7 +25,7 @@ import {useObserverListener} from "react-hook-useobserver/lib";
 interface GridProps {
     data: Array<any>,
     columns: Array<GridColumn>,
-    onFilterChange?: (filterValue: any) => void,
+    onFilterChange?: (filterValue: Map<string,any>) => void,
     defaultRowHeight?: number,
     defaultColWidth?: number,
     focusedDataItem?: any,
@@ -172,9 +172,9 @@ interface GridSortItem {
 interface GridContextType {
     onCellResize: (colIndex: number, width: number) => void,
     onRowResize: (colIndex: number, height: number) => void,
-    setGridFilter: (value: any) => any,
-    $gridFilter?: Observer<any>,
-    onFilterChange: () => void,
+    setGridFilter: (value: (oldVal:Map<string,any>) => Map<string,any>) => void,
+    $gridFilter?: Observer<Map<string,any>>,
+    commitFilterChange: () => void,
     setGridSort?: (value: (oldVal: Array<GridSortItem>) => Array<GridSortItem>) => void,
     $gridSort?: Observer<Array<GridSortItem>>,
     props:GridProps,
@@ -189,7 +189,7 @@ const GridContext = createContext<MutableRefObject<GridContextType>>({
         onCellResize: noOp,
         onRowResize: noOp,
         setGridFilter: noOp,
-        onFilterChange: noOp,
+        commitFilterChange: noOp,
         props:{data:[],columns:[],}
     }
 });
@@ -255,22 +255,24 @@ export function CellComponentForColumnHeader(props: HeaderCellComponentProps) {
 
 function CellComponentForColumnHeaderFilter(props: HeaderCellComponentProps) {
     const gridContextRef = useContext(GridContext);
-    const [$empty] = useObserver({});
-    const value = useObserverValue(gridContextRef.current.$gridFilter || $empty, (value: any) => value[props.field] || '');
+    const [$empty] = useObserver(new Map<string,any>());
+    const value = useObserverValue(gridContextRef.current.$gridFilter || $empty, (arg:any) => {
+        const value:Map<string,any> = arg;
+        return value.get(props.field) || ''
+    });
     return <Vertical style={{borderTop: '1px solid #ddd'}}>
         <input type="text" value={value} style={{border: 'none', borderRadius: 0, padding: '2px 5px'}}
                className={classes.filterInput} onChange={(event) => {
-            gridContextRef.current.setGridFilter((oldVal: any) => {
-                return {...oldVal, [props.field]: event.target.value}
+            gridContextRef.current.setGridFilter((oldVal: Map<string,any>) => {
+                const newMap = new Map<string,any>(oldVal);
+                newMap.set(props.field,event.target.value);
+                return newMap;
             })
         }} onKeyUp={(event) => {
-
             if (event.code === 'Enter') {
-
                 event.preventDefault();
                 event.stopPropagation();
-                gridContextRef.current.onFilterChange();
-
+                gridContextRef.current.commitFilterChange();
             }
         }}/>
     </Vertical>
@@ -340,14 +342,14 @@ function compareValue(props: { prev: any, next: any, gridSort: Array<GridSortIte
     return 0;
 }
 
-function filterDataSource(dataSource: Array<any>, $gridFilter:MutableRefObject<any>, columns: Array<GridColumn>) {
+function filterDataSource(dataSource: Array<any>, $gridFilter:Observer<Map<string,number>>, columns: Array<GridColumn>) {
     return dataSource.filter((data, rowIndex) => {
-        return Object.keys($gridFilter.current).reduce((accumulator: boolean, key: string) => {
-            const gridFilter: any = $gridFilter.current;
+        return Array.from($gridFilter.current.keys()).reduce((accumulator: boolean, key: string) => {
+            const gridFilter: Map<string,any> = $gridFilter.current;
             const colIndex = columns.findIndex(col => col.field === key);
             const column = columns[colIndex];
             const dataItemToValue = column?.dataItemToValue || dataItemToValueDefaultImplementation;
-            const filterValue = gridFilter[key].toString().toUpperCase();
+            const filterValue = gridFilter.get(key).toString().toUpperCase();
             const value = (dataItemToValue({
                 dataItem: data,
                 dataSource,
@@ -367,7 +369,7 @@ export default function Grid(gridProps: GridProps) {
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
     const [$scrollLeft, setScrollLeft] = useObserver(0);
     const [$scrollTop, setScrollTop] = useObserver(0);
-    const [$gridFilter, setGridFilter] = useObserver({});
+    const [$gridFilter, setGridFilter] = useObserver(new Map<string,any>());
 
     const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
     const [$focusedDataItem, setFocusedDataItem] = useObserver(focusedDataItem);
@@ -410,7 +412,7 @@ export default function Grid(gridProps: GridProps) {
         $gridFilter, setGridFilter,
         $gridSort, setGridSort,
         $focusedDataItem,
-        onFilterChange: () => {
+        commitFilterChange: () => {
             if (onFilterChange) {
                 onFilterChange($gridFilter.current)
             } else {

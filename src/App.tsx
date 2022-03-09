@@ -36,7 +36,7 @@ export default function App() {
             {field:'email',width:500,title:'Email'}
         ]} defaultRowHeight={50} focusedDataItem={focusedItem} onFocusedDataItemChange={(newItem) => {
             setFocusedItem(newItem);
-        }} />
+        }}  />
     </div>
 }
 //
