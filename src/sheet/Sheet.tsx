@@ -1,4 +1,15 @@
-import React, {CSSProperties, ReactElement, useCallback, useEffect, useRef, useState} from "react";
+import React, {
+    createContext,
+    CSSProperties,
+    MutableRefObject,
+    ReactElement,
+    SyntheticEvent,
+    useCallback,
+    useContext,
+    useEffect,
+    useRef,
+    useState
+} from "react";
 import {useObserver, useObserverListener} from "react-hook-useobserver";
 import {Observer} from "react-hook-useobserver/lib/useObserver";
 import {Vertical} from "react-hook-components";
@@ -26,7 +37,7 @@ export interface Column {
     width: number,
     cellComponent?: React.FC<CellComponentStyledProps>,
     cellStyleFunction?: (props: CellComponentProps) => CSSProperties,
-    dataItemToValue?: (props:DataItemToValueProps) => string
+    dataItemToValue?: (props: DataItemToValueProps) => string
 }
 
 export interface HeaderCellComponentProps {
@@ -48,11 +59,16 @@ interface SheetProperties<DataItem> {
     $scrollTop?: Observer<number>,
     showScroller?: boolean,
     defaultColWidth?: number,
-    defaultRowHeight?: number
+    defaultRowHeight?: number,
+    onCellClicked?: CellClickedCallback,
+    onCellClickedCapture?: CellClickedCallback,
+    onCellDoubleClicked?: CellClickedCallback,
+    onCellDoubleClickedCapture?: CellClickedCallback,
+    $focusedDataItem?: Observer<any>
 
 }
 
-interface DataItemToValueProps{
+interface DataItemToValueProps {
     dataSource: Array<any>,
     dataItem: any,
     column: Column,
@@ -60,7 +76,7 @@ interface DataItemToValueProps{
     colIndex: number,
 }
 
-export interface CellComponentProps extends DataItemToValueProps{
+export interface CellComponentProps extends DataItemToValueProps {
     value: any
 }
 
@@ -72,8 +88,8 @@ interface CellRendererProps extends CellComponentProps {
     style?: CSSProperties,
 }
 
-export interface CellComponentStyledProps extends CellComponentProps{
-    cellStyle:CSSProperties
+export interface CellComponentStyledProps extends CellComponentProps {
+    cellStyle: CSSProperties
 }
 
 interface RowAccumulator {
@@ -103,19 +119,33 @@ const CellComponentDefaultImplementation: React.FC<CellComponentStyledProps> = (
     return <Vertical style={props.cellStyle} vAlign={'center'}>{props.value}</Vertical>
 };
 
-function cellStyleFunctionDefaultImplementation(props: CellComponentProps): CSSProperties {
+function cellStyleFunctionDefaultImplementation(props: CellStyleFunctionProperties): CSSProperties {
+    const isFocused = props.isFocused;
     return {
         padding: '0 5px',
-        backgroundColor: (props.rowIndex % 2) ? '#eee' : '#fff',
+        backgroundColor: isFocused ? '#99D9EA' : (props.rowIndex % 2) ? '#eee' : '#fff',
         height: '100%',
-        overflow : 'hidden'
+        overflow: 'hidden'
     }
 }
 
+type CellClickedCallback = (event: { event: SyntheticEvent<HTMLDivElement>, rowIndex: number, columnIndex: number, dataItem: any, column: Column, value: any, dataSource: Array<any> }) => void;
+
+interface SheetContextType {
+    props?:SheetProperties<any>
+}
+
+const SheetContext = createContext<MutableRefObject<SheetContextType>>({current: {props:undefined}});
+
 export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
+
+    const sheetContextRef = useRef<SheetContextType>({props});
+    sheetContextRef.current = {props};
     const [$reRender, setReRender] = useObserver(new Date());
     const forceUpdate = useCallback(() => setReRender(new Date()), []);
-    useEffect(() => forceUpdate(), [props.data]);
+    useEffect(() => {
+        forceUpdate();
+    }, [props.data]);
     const {$customColWidth, $customRowHeight} = props;
     const [$defaultRowHeight,] = useObserver(props.defaultRowHeight || DEFAULT_HEIGHT);
     const [$defaultColWidth,] = useObserver(props.defaultColWidth || DEFAULT_WIDTH);
@@ -142,7 +172,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
 
     useEffect(() => {
         setTotalHeightOfContent(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current))
-    },[props.data])
+    }, [props.data]);
 
     const viewPortRef = useRef(defaultDom);
 
@@ -153,7 +183,6 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     }, []);
 
     useObserverListener([$reRender, $viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight || $emptyMapObserver, $customColWidth || $emptyMapObserver], () => {
-
         const scrollerPosition = $scrollerPosition.current;
         const defaultRowHeight = $defaultRowHeight.current;
         const defaultColWidth = $defaultColWidth.current;
@@ -184,24 +213,26 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
             scrollTop: viewPortDom.scrollTop
         })
     }, []);
-    return <div ref={viewPortRef}
-                style={{
-                    width: '100%',
-                    height: '100%',
-                    overflow: props.showScroller === false ? 'hidden' : 'auto',
-                    boxSizing: 'border-box',
-                    ...props.styleContainer
-                }} onScroll={handleScroller}>
-        <div style={{
-            width: $totalWidthOfContent.current,
-            height: $totalHeightOfContent.current,
-            boxSizing: 'border-box',
-            backgroundColor: '#f6f6f6',
-            position: 'relative', ...props.styleViewPort
-        }}>
-            {elements}
+    return <SheetContext.Provider value={sheetContextRef}>
+        <div ref={viewPortRef}
+             style={{
+                 width: '100%',
+                 height: '100%',
+                 overflow: props.showScroller === false ? 'hidden' : 'auto',
+                 boxSizing: 'border-box',
+                 ...props.styleContainer
+             }} onScroll={handleScroller}>
+            <div style={{
+                width: $totalWidthOfContent.current,
+                height: $totalHeightOfContent.current,
+                boxSizing: 'border-box',
+                backgroundColor: '#f6f6f6',
+                position: 'relative', ...props.styleViewPort
+            }}>
+                {elements}
+            </div>
         </div>
-    </div>
+    </SheetContext.Provider>
 }
 
 function calculateBeforeViewPort(columns: Array<any>, customLength: Map<number, number> = new Map<number, number>(), defaultLength: number = 50, scrollerPosition: number = 0): CalculateBeforeViewPort {
@@ -250,12 +281,31 @@ function calculateLength(customLength: Map<number, number> = new Map<number, num
     const totalDefaultLength = (data.length - customLengthKeys.length) * defaultLength;
     return totalDefaultLength + totalCustomLength;
 }
-const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) {
 
+interface CellStyleFunctionProperties extends CellRendererProps{
+    focusedItem:any,
+    isFocused:boolean
+}
+
+const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) {
+    const sheetContext = useContext(SheetContext);
     const cellStyleFunction = props.column.cellStyleFunction || cellStyleFunctionDefaultImplementation;
-    const cellStyle = cellStyleFunction(props);
+    const [$emptyObserver] = useObserver(undefined);
+    const [isFocused,setIsFocused] = useState(() => {
+        return props.dataItem === sheetContext.current.props?.$focusedDataItem?.current;
+    });
+    useEffect(() => setIsFocused(props.dataItem === sheetContext.current.props?.$focusedDataItem?.current),[props.dataItem]);
+    useObserverListener(sheetContext.current.props?.$focusedDataItem || $emptyObserver,() => {
+        const focusedItem:any = sheetContext.current.props?.$focusedDataItem?.current;
+        const isFocused = focusedItem === props.dataItem;
+        setIsFocused(isFocused);
+    });
+    const focusedItem:any = sheetContext.current.props?.$focusedDataItem?.current;
+    const cellStyle = cellStyleFunction({isFocused,focusedItem,...props});
     const CellComponent = props.column.cellComponent || CellComponentDefaultImplementation;
+
     return <div
+
         style={{
             position: 'absolute',
             height: props.height,
@@ -269,7 +319,59 @@ const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) 
             display: 'flex',
             flexDirection: 'column',
             ...props.style
-        }}>
+        }} onClick={(event: SyntheticEvent<HTMLDivElement>) => {
+        if (sheetContext.current?.props?.onCellClicked) {
+            sheetContext.current.props.onCellClicked({
+                event,
+                dataItem: props.dataItem,
+                rowIndex: props.rowIndex,
+                columnIndex: props.colIndex,
+                column: props.column,
+                value: props.value,
+                dataSource: props.dataSource
+            });
+        }
+    }}
+        onClickCapture={(event: SyntheticEvent<HTMLDivElement>) => {
+            if (sheetContext.current?.props?.onCellClickedCapture) {
+                sheetContext.current.props.onCellClickedCapture({
+                    event,
+                    dataItem: props.dataItem,
+                    rowIndex: props.rowIndex,
+                    columnIndex: props.colIndex,
+                    column: props.column,
+                    value: props.value,
+                    dataSource: props.dataSource
+                });
+            }
+        }}
+        onDoubleClick={(event: SyntheticEvent<HTMLDivElement>) => {
+            if (sheetContext.current?.props?.onCellDoubleClicked) {
+                sheetContext.current?.props?.onCellDoubleClicked({
+                    event,
+                    dataItem: props.dataItem,
+                    rowIndex: props.rowIndex,
+                    columnIndex: props.colIndex,
+                    column: props.column,
+                    value: props.value,
+                    dataSource: props.dataSource
+                });
+            }
+        }}
+        onDoubleClickCapture={(event: SyntheticEvent<HTMLDivElement>) => {
+            if (sheetContext.current?.props?.onCellDoubleClickedCapture) {
+                sheetContext.current?.props?.onCellDoubleClickedCapture({
+                    event,
+                    dataItem: props.dataItem,
+                    rowIndex: props.rowIndex,
+                    columnIndex: props.colIndex,
+                    column: props.column,
+                    value: props.value,
+                    dataSource: props.dataSource
+                });
+            }
+        }}
+    >
         <CellComponent
             value={props.value}
             column={props.column}
@@ -310,7 +412,7 @@ function renderComponent({
             const column = columns[colIndex];
             const dataItem = data[rowIndex];
             const dataItemToValue = column.dataItemToValue || dataItemToValueDefaultImplementation;
-            const value = dataItemToValue({dataItem,column,colIndex,dataSource:data,rowIndex});
+            const value = dataItemToValue({dataItem, column, colIndex, dataSource: data, rowIndex});
             colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex}
                                                top={acc.top}
                                                width={colWidth}
@@ -318,7 +420,7 @@ function renderComponent({
                                                dataItem={dataItem}
                                                value={value}
                                                column={column}
-                                               left={colAcc.left} height={rowHeight} />);
+                                               left={colAcc.left} height={rowHeight}/>);
             colAcc.left = colAcc.left + colWidth;
             return colAcc;
         }, {elements: [], left: totalWidthBeforeViewPort});
@@ -330,7 +432,7 @@ function renderComponent({
     setElements(elements);
 }
 
-export function dataItemToValueDefaultImplementation(props:DataItemToValueProps){
+export function dataItemToValueDefaultImplementation(props: DataItemToValueProps) {
     const value = props.dataItem[props.column.field];
     return value?.toString()
 }

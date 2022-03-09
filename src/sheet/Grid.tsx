@@ -10,6 +10,7 @@ import React, {
     createContext,
     FC,
     MouseEvent as ReactMouseEvent,
+    MutableRefObject,
     useCallback,
     useContext,
     useEffect,
@@ -25,8 +26,10 @@ interface GridProps {
     data: Array<any>,
     columns: Array<GridColumn>,
     onFilterChange?: (filterValue: any) => void,
-    defaultRowHeight? : number,
-    defaultColWidth? : number
+    defaultRowHeight?: number,
+    defaultColWidth?: number,
+    focusedDataItem?: any,
+    onFocusedDataItemChange?: (newItem: any, oldItem: any) => void,
 }
 
 export interface GridColumn extends Column {
@@ -43,12 +46,12 @@ const CellComponentForColumnHeaderBase: FC<CellComponentProps> = (props) => {
     const index = props.colIndex;
     const handlerRef = useRef(defaultDif);
     const containerRef = useRef(defaultDif);
-    const {onCellResize} = useContext(GridContext);
+    const gridContextRef = useContext(GridContext);
     const column: any = props.column;
     const gridColumn: GridColumn = column;
     const CellComponentForColHeader = gridColumn.headerCellComponent || CellComponentForColumnHeader;
     const mousePositionRef = useRef({current: 0, next: 0, dragActive: false});
-    const handleDrag = useCallback(dragListener(mousePositionRef, onCellResize, index, containerRef, handlerRef, "horizontal"), []);
+    const handleDrag = useCallback(dragListener(mousePositionRef, gridContextRef.current.onCellResize, index, containerRef, handlerRef, "horizontal"), []);
     useEffect(() => {
         handlerRef.current.style.left = `${containerRef.current.getBoundingClientRect().width - Math.ceil(0.5 * HANDLER_LENGTH)}px`;
     }, []);
@@ -81,9 +84,9 @@ const CellComponentToResizeRow: React.FC<CellComponentProps> = (props: CellCompo
     const containerRef = useRef(defaultDif);
     const handlerBottomRef = useRef(defaultDif);
 
-    const {onRowResize} = useContext(GridContext);
+    const gridContextRef = useContext(GridContext);
     const mousePositionRef = useRef({current: 0, next: 0, dragActive: false});
-    const handleDrag = useCallback(dragListener(mousePositionRef, onRowResize, index, containerRef, handlerBottomRef, "vertical"), []);
+    const handleDrag = useCallback(dragListener(mousePositionRef, gridContextRef.current.onRowResize, index, containerRef, handlerBottomRef, "vertical"), []);
     useEffect(() => {
         handlerBottomRef.current.style.top = `${containerRef.current.getBoundingClientRect().height - Math.ceil(0.5 * HANDLER_LENGTH)}px`;
     }, []);
@@ -166,24 +169,29 @@ interface GridSortItem {
     direction: 'ASC' | 'DESC' | ''
 }
 
-interface GridContextProps {
+interface GridContextType {
     onCellResize: (colIndex: number, width: number) => void,
     onRowResize: (colIndex: number, height: number) => void,
     setGridFilter: (value: any) => any,
     $gridFilter?: Observer<any>,
     onFilterChange: () => void,
     setGridSort?: (value: (oldVal: Array<GridSortItem>) => Array<GridSortItem>) => void,
-    $gridSort?: Observer<Array<GridSortItem>>
+    $gridSort?: Observer<Array<GridSortItem>>,
+    props:GridProps,
+    $focusedDataItem?: Observer<any>
 }
 
 function noOp() {
 }
 
-const GridContext = createContext<GridContextProps>({
-    onCellResize: noOp,
-    onRowResize: noOp,
-    setGridFilter: noOp,
-    onFilterChange: noOp,
+const GridContext = createContext<MutableRefObject<GridContextType>>({
+    current: {
+        onCellResize: noOp,
+        onRowResize: noOp,
+        setGridFilter: noOp,
+        onFilterChange: noOp,
+        props:{data:[],columns:[],}
+    }
 });
 
 const SORT_DIRECTION = {
@@ -192,9 +200,9 @@ const SORT_DIRECTION = {
 };
 
 function SortComponent({field}: { field: string }) {
-    const {$gridSort} = useContext(GridContext);
+    const gridContextRef = useContext(GridContext);
     const [$defaultSort] = useObserver([]);
-    const direction = useObserverValue($gridSort || $defaultSort, (gridSort: Array<GridSortItem>) => {
+    const direction = useObserverValue(gridContextRef.current.$gridSort || $defaultSort, (gridSort: Array<GridSortItem>) => {
         const sort = gridSort.find(sort => sort.field === field);
         return sort?.direction;
     });
@@ -208,13 +216,13 @@ export function CellComponentForColumnHeader(props: HeaderCellComponentProps) {
     const column: any = props.column;
     const gridColumn: GridColumn = column;
     const FilterCellComponent: React.FC<HeaderCellComponentProps> = gridColumn.filterCellComponent || CellComponentForColumnHeaderFilter;
-    const {setGridSort} = useContext(GridContext);
+    const gridContextRef = useContext(GridContext);
 
     function handleSortClicked() {
-        if (!setGridSort) {
+        if (!gridContextRef.current.setGridSort) {
             return;
         }
-        setGridSort((oldVal: Array<GridSortItem>) => {
+        gridContextRef.current.setGridSort((oldVal: Array<GridSortItem>) => {
             // lets find old val index
             const oldField = oldVal.find(s => s.field === gridColumn.field);
             if (oldField) {
@@ -246,13 +254,13 @@ export function CellComponentForColumnHeader(props: HeaderCellComponentProps) {
 }
 
 function CellComponentForColumnHeaderFilter(props: HeaderCellComponentProps) {
-    const {$gridFilter, setGridFilter, onFilterChange} = useContext(GridContext);
+    const gridContextRef = useContext(GridContext);
     const [$empty] = useObserver({});
-    const value = useObserverValue($gridFilter || $empty, (value: any) => value[props.field] || '');
+    const value = useObserverValue(gridContextRef.current.$gridFilter || $empty, (value: any) => value[props.field] || '');
     return <Vertical style={{borderTop: '1px solid #ddd'}}>
         <input type="text" value={value} style={{border: 'none', borderRadius: 0, padding: '2px 5px'}}
                className={classes.filterInput} onChange={(event) => {
-            setGridFilter((oldVal: any) => {
+            gridContextRef.current.setGridFilter((oldVal: any) => {
                 return {...oldVal, [props.field]: event.target.value}
             })
         }} onKeyUp={(event) => {
@@ -261,20 +269,20 @@ function CellComponentForColumnHeaderFilter(props: HeaderCellComponentProps) {
 
                 event.preventDefault();
                 event.stopPropagation();
-                onFilterChange();
+                gridContextRef.current.onFilterChange();
 
             }
         }}/>
     </Vertical>
 }
 
-function compareValue(props:{prev: any, next: any,gridSort:Array<GridSortItem>,index:number,columns:Array<GridColumn>,dataSource:Array<any>}):number {
-    const {prev, next,gridSort,index} = props;
-    if(index >= gridSort.length){
+function compareValue(props: { prev: any, next: any, gridSort: Array<GridSortItem>, index: number, columns: Array<GridColumn>, dataSource: Array<any> }): number {
+    const {prev, next, gridSort, index} = props;
+    if (index >= gridSort.length) {
         return 0;
     }
 
-    const {field,direction} = gridSort[index];
+    const {field, direction} = gridSort[index];
     const isAsc = direction === 'ASC';
     const isDesc = direction === 'DESC';
     const columns = props.columns;
@@ -282,20 +290,32 @@ function compareValue(props:{prev: any, next: any,gridSort:Array<GridSortItem>,i
     const column = columns[colIndex];
     const dataSource = props.dataSource;
     const dataItemToLabel = column.dataItemToValue || dataItemToValueDefaultImplementation;
-    const prevValue = dataItemToLabel({dataItem:prev,column,colIndex,rowIndex:dataSource.indexOf(prev),dataSource});
-    const nextValue = dataItemToLabel({dataItem:next,column,colIndex,rowIndex:dataSource.indexOf(next),dataSource});
+    const prevValue = dataItemToLabel({
+        dataItem: prev,
+        column,
+        colIndex,
+        rowIndex: dataSource.indexOf(prev),
+        dataSource
+    });
+    const nextValue = dataItemToLabel({
+        dataItem: next,
+        column,
+        colIndex,
+        rowIndex: dataSource.indexOf(next),
+        dataSource
+    });
     if (typeof prevValue === 'string' && typeof nextValue === 'string') {
         const prevLowerCase = prevValue.toLowerCase();
         const nextLowerCase = nextValue.toLowerCase();
-        if(prevLowerCase === nextLowerCase){
-            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
+        if (prevLowerCase === nextLowerCase) {
+            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
         }
         const val = prevLowerCase > nextLowerCase ? 1 : -1;
         return isAsc ? val : isDesc ? -val : 0
     }
     if (typeof prevValue === 'number' && typeof nextValue === 'number') {
-        if(prevValue === nextValue){
-            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
+        if (prevValue === nextValue) {
+            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
         }
         const val = prevValue - nextValue;
         return isAsc ? val : isDesc ? -val : 0;
@@ -303,16 +323,16 @@ function compareValue(props:{prev: any, next: any,gridSort:Array<GridSortItem>,i
     if (prevValue instanceof Date && nextValue instanceof Date) {
         const prevValueTime = prevValue.getTime();
         const nextValueTime = nextValue.getTime();
-        if(prevValue === nextValue){
-            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
+        if (prevValue === nextValue) {
+            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
         }
         const val = prevValueTime - nextValueTime;
         return isAsc ? val : isDesc ? -val : 0;
 
     }
     if (typeof prevValue === 'boolean' && typeof nextValue === 'boolean') {
-        if(prevValue === nextValue){
-            return compareValue({prev,next,gridSort,index:index+1,columns,dataSource});
+        if (prevValue === nextValue) {
+            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
         }
         const val = prevValue ? 1 : -1;
         return isAsc ? val : isDesc ? -val : 0;
@@ -320,79 +340,96 @@ function compareValue(props:{prev: any, next: any,gridSort:Array<GridSortItem>,i
     return 0;
 }
 
-export default function Grid({data: dataSource, columns, onFilterChange,defaultRowHeight,defaultColWidth}: GridProps) {
+function filterDataSource(dataSource: Array<any>, $gridFilter:MutableRefObject<any>, columns: Array<GridColumn>) {
+    return dataSource.filter((data, rowIndex) => {
+        return Object.keys($gridFilter.current).reduce((accumulator: boolean, key: string) => {
+            const gridFilter: any = $gridFilter.current;
+            const colIndex = columns.findIndex(col => col.field === key);
+            const column = columns[colIndex];
+            const dataItemToValue = column?.dataItemToValue || dataItemToValueDefaultImplementation;
+            const filterValue = gridFilter[key].toString().toUpperCase();
+            const value = (dataItemToValue({
+                dataItem: data,
+                dataSource,
+                column,
+                colIndex,
+                rowIndex
+            }) || '').toUpperCase();
+            return (value.indexOf(filterValue) >= 0) && accumulator;
+        }, true);
+    });
+}
+
+export default function Grid(gridProps: GridProps) {
+    const {data: dataSource, focusedDataItem, columns, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
     const [$data, setData] = useObserver(dataSource);
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>(columns.map((col, index) => [index, col.width])));
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
     const [$scrollLeft, setScrollLeft] = useObserver(0);
     const [$scrollTop, setScrollTop] = useObserver(0);
     const [$gridFilter, setGridFilter] = useObserver({});
+
     const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
-    const headerData = [columns.reduce((acc: any, column: GridColumn) => {
+    const [$focusedDataItem, setFocusedDataItem] = useObserver(focusedDataItem);
+    useEffect(() => setFocusedDataItem(focusedDataItem),[focusedDataItem]);
+
+    const headerData = useMemo(() => [columns.reduce((acc: any, column: GridColumn) => {
         acc[column.field] = column.title;
         return acc;
-    }, {})];
-    useEffect(() => {
-        setData(dataSource);
-    },[dataSource]);
-    const columnDataToResizeRow: GridColumn = {
+    }, {})],[]);
+    useEffect(() => setData(dataSource), [dataSource]);
+
+    const columnDataToResizeRow: GridColumn = useMemo(() => ({
         field: '_',
         width: FIRST_COLUMN_WIDTH,
         title: ' ',
         cellComponent: CellComponentToResizeRow
-    };
+    }),[]);
+
+    const columnsHeaderColumn = useMemo(() => columns.map<Column>((c: Column) => ({
+        ...c,
+        cellComponent: CellComponentForColumnHeaderBase
+    })),[]);
+
+    const gridContextRef = useRef({
+        props:gridProps,
+        onCellResize: (index:number, width:number) => {
+            setCustomColWidth(oldVal => {
+                const newVal = new Map(oldVal);
+                newVal.set(index, width);
+                return newVal;
+            });
+        },
+        onRowResize: (index:number, height:number) => {
+            setCustomRowHeight(oldVal => {
+                const newVal = new Map(oldVal);
+                newVal.set(index, height);
+                return newVal;
+            });
+        },
+        $gridFilter, setGridFilter,
+        $gridSort, setGridSort,
+        $focusedDataItem,
+        onFilterChange: () => {
+            if (onFilterChange) {
+                onFilterChange($gridFilter.current)
+            } else {
+                const filteredData = filterDataSource(gridContextRef.current.props.data, $gridFilter, gridContextRef.current.props.columns);
+                setData(filteredData);
+            }
+        }
+    });
+    gridContextRef.current.props = gridProps;
     const sheetDataToResizeRow = useMemo(() => dataSource.map(() => ({_: ''})), [dataSource]);
     useObserverListener($gridSort, () => {
         const gridSort: Array<GridSortItem> = $gridSort.current;
         const clonedData = [...dataSource];
-        clonedData.sort((prev:any,next:any) => compareValue({prev,next,gridSort,index:0,columns,dataSource}))
+        clonedData.sort((prev: any, next: any) => compareValue({prev, next, gridSort, index: 0, columns, dataSource}))
         setData(clonedData);
     });
 
     return <Vertical style={{height: '100%', width: '100%'}}>
-        <GridContext.Provider value={{
-            onCellResize: (index, width) => {
-                setCustomColWidth(oldVal => {
-                    const newVal = new Map(oldVal);
-                    newVal.set(index, width);
-                    return newVal;
-                });
-            },
-            onRowResize: (index, height) => {
-                setCustomRowHeight(oldVal => {
-                    const newVal = new Map(oldVal);
-                    newVal.set(index, height);
-                    return newVal;
-                });
-            },
-            $gridFilter, setGridFilter,
-            $gridSort, setGridSort,
-            onFilterChange: () => {
-                // we need to inform the outside that filter has changed !
-                // if user has implement onFilterChange, then the filter will be their responsibility,
-                // however if the user does not implement onFilterChange, then it will be grid responsibility
-                // to perform local filtering
-
-                if (onFilterChange) {
-                    onFilterChange($gridFilter.current)
-                } else {
-                    // this is our logic to perform filtering
-                    const filteredData = dataSource.filter((data,rowIndex) => {
-                        return Object.keys($gridFilter.current).reduce((accumulator: boolean, key: string) => {
-                            const gridFilter: any = $gridFilter.current;
-                            const colIndex = columns.findIndex(col => col.field === key);
-                            const column = columns[colIndex];
-                            const dataItemToValue = column?.dataItemToValue || dataItemToValueDefaultImplementation;
-                            const filterValue = gridFilter[key].toString().toUpperCase();
-                            const value = (dataItemToValue({dataItem:data,dataSource,column,colIndex,rowIndex}) || '').toUpperCase();
-                            return (value.indexOf(filterValue) >= 0) && accumulator;
-                        }, true);
-                    });
-
-                    setData(filteredData);
-                }
-            }
-        }}>
+        <GridContext.Provider value={gridContextRef}>
             <Horizontal>
                 <Vertical style={{
                     flexBasis: FIRST_COLUMN_WIDTH,
@@ -404,10 +441,7 @@ export default function Grid({data: dataSource, columns, onFilterChange,defaultR
                 <Vertical style={{width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
 
                     <Sheet data={headerData}
-                           columns={columns.map<Column>((c: Column) => ({
-                               ...c,
-                               cellComponent: CellComponentForColumnHeaderBase
-                           }))}
+                           columns={columnsHeaderColumn}
                            $customColWidth={$customColWidth}
                            $scrollLeft={$scrollLeft}
                            showScroller={false}
@@ -434,13 +468,24 @@ export default function Grid({data: dataSource, columns, onFilterChange,defaultR
                         return <Sheet data={$data.current} columns={columns}
                                       $customRowHeight={$customRowHeight}
                                       $customColWidth={$customColWidth}
-
                                       onScroll={({scrollLeft, scrollTop}) => {
                                           setScrollLeft(scrollLeft);
                                           setScrollTop(scrollTop);
                                       }}
                                       defaultColWidth={defaultColWidth}
                                       defaultRowHeight={defaultRowHeight}
+                                      onCellClicked={event => {
+                                          if(gridProps.onFocusedDataItemChange){
+                                              gridProps.onFocusedDataItemChange(event.dataItem,$focusedDataItem.current);
+                                          }else{
+                                              setFocusedDataItem(event.dataItem);
+                                          }
+                                      }}
+                                      onCellDoubleClicked={event => {
+
+                                      }}
+                                      $focusedDataItem={$focusedDataItem}
+
                         />
                     }}/>
                 </Vertical>
