@@ -32,9 +32,10 @@ interface CalculateInsideViewPort {
     lengths: Map<number, number>
 }
 
+
 export interface Column {
     field: string,
-    width: number,
+    width: number | string,
     cellComponent?: React.FC<CellComponentStyledProps>,
     cellStyleFunction?: (props: CellComponentProps) => CSSProperties,
     dataItemToValue?: (props: DataItemToValueProps) => string

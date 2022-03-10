@@ -365,7 +365,8 @@ function filterDataSource(dataSource: Array<any>, $gridFilter:Observer<Map<strin
 export default function Grid(gridProps: GridProps) {
     const {data: dataSource, focusedDataItem, columns, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
     const [$data, setData] = useObserver(dataSource);
-    const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>(columns.map((col, index) => [index, col.width])));
+    const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
+    const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>());
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
     const [$scrollLeft, setScrollLeft] = useObserver(0);
     const [$scrollTop, setScrollTop] = useObserver(0);
@@ -373,8 +374,37 @@ export default function Grid(gridProps: GridProps) {
 
     const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
     const [$focusedDataItem, setFocusedDataItem] = useObserver(focusedDataItem);
+    const viewportRef = useRef(defaultDif);
+    useEffect(() => setViewPortDimension(viewportRef.current.getBoundingClientRect()),[])
     useEffect(() => setFocusedDataItem(focusedDataItem),[focusedDataItem]);
-
+    useObserverListener($viewPortDimension,() => {
+        if($viewPortDimension.current.width > 0){
+            const columnsWidth = new Map<number,number>();
+            const columnsWidthPercentage = new Map<number,number>();
+            let totalColumnsWidth = 0 ;
+            let totalPercentage = 0;
+            const viewPortWidth = $viewPortDimension.current.width;
+            columns.forEach((column,columnIndex, index) => {
+                if(typeof column.width === 'number'){
+                    totalColumnsWidth += column.width;
+                    columnsWidth.set(columnIndex,column.width);
+                }
+                if(typeof column.width === 'string' && column.width.endsWith('%')){
+                    const widthInPercentage = parseInt(column.width.replace('%',''));
+                    columnsWidthPercentage.set(columnIndex,widthInPercentage);
+                    totalPercentage += widthInPercentage;
+                }
+            });
+            const remainingWidth = viewPortWidth - totalColumnsWidth;
+            if(remainingWidth > 0){
+                columnsWidthPercentage.forEach((value, key) => {
+                    const width = (value / totalPercentage) * remainingWidth;
+                    columnsWidth.set(key,width);
+                });
+            }
+            setCustomColWidth(columnsWidth);
+        }
+    })
     const headerData = useMemo(() => [columns.reduce((acc: any, column: GridColumn) => {
         acc[column.field] = column.title;
         return acc;
@@ -464,7 +494,7 @@ export default function Grid(gridProps: GridProps) {
                            defaultRowHeight={defaultRowHeight}
                     />
                 </Vertical>
-                <Vertical style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
+                <Vertical ref={viewportRef} style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
                     <ObserverValue observers={$data} render={() => {
 
                         return <Sheet data={$data.current} columns={columns}

@@ -1,43 +1,54 @@
 import React, {useEffect, useState} from "react";
 import Grid from "./sheet/Grid";
 import {Vertical} from "react-hook-components";
-import {CellComponentStyledProps} from "./sheet/Sheet";
-
 
 
 export default function App() {
-    const [data,setData] = useState([]);
-    const [focusedItem,setFocusedItem] = useState(undefined);
+    const [data, setData] = useState([]);
+    const [columns,setColumns] = useState([
+        {
+            field: 'name', width: 100, title: 'Name', dataItemToValue: (props:any) => {
+                return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
+            }
+        },
+        {field: 'gender', width: '50%', title: 'Gender'},
+        {field: 'cell', width: '100%', title: 'Cell'},
+        {field: 'email', width: '100%', title: 'Email'}
+    ]);
+    const [focusedItem, setFocusedItem] = useState(undefined);
     useEffect(() => {
-        (async() => {
+        (async () => {
             const response = await fetch('./person.json');
-            const data:any = await response.json();
+            const data: any = await response.json();
 
             setData(data.results);
         })();
 
-    },[])
-    return <div style={{
+    }, [])
+    return <Vertical style={{
         padding: 10,
         height: '100%',
         width: '100%',
         boxSizing: 'border-box',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center'
     }}>
-        <Grid data={data} columns={[
-            {field:'name',width:500,title:'Name',dataItemToValue:(props) => {
-                    return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
-                }
-            },
-            {field:'gender',width:200,title:'Gender'},
-            {field:'cell',width:300,title:'Cell'},
-            {field:'email',width:500,title:'Email'}
-        ]} defaultRowHeight={50} focusedDataItem={focusedItem} onFocusedDataItemChange={(newItem) => {
-            setFocusedItem(newItem);
-        }}  />
-    </div>
+        <Vertical hAlign={'right'} style={{marginBottom:10}}>
+            <button onClick={() => {
+                setColumns([
+                    {
+                        field: 'name', width: 100, title: 'Name', dataItemToValue: (props:any) => {
+                            return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
+                        }
+                    },
+                    {field: 'email', width: '100%', title: 'Email'}
+                ]);
+            }}>Test Update Column</button>
+        </Vertical>
+        <Vertical style={{overflow: "auto", flexGrow: 1, height: '100%'}}>
+            <Grid data={data} columns={columns} defaultRowHeight={50} focusedDataItem={focusedItem} onFocusedDataItemChange={(newItem) => {
+                setFocusedItem(newItem);
+            }}/>
+        </Vertical>
+    </Vertical>
 }
 //
 // function CellComponentPicture(props:CellComponentStyledProps) {
