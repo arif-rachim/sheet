@@ -1,17 +1,31 @@
 import React, {useEffect, useState} from "react";
-import Grid from "./sheet/Grid";
+import Grid, {GridColumn} from "./sheet/Grid";
 import {Vertical} from "react-hook-components";
 
 
 export default function App() {
     const [data, setData] = useState([]);
-    const [columns,setColumns] = useState([
+    const [columns, setColumns] = useState<Array<GridColumn>>([
         {
-            field: 'name', width: 100, title: 'Name', dataItemToValue: (props:any) => {
+            field: 'name', width: 100, title: 'Name', dataItemToValue: (props: any) => {
                 return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
             }
         },
-        {field: 'gender', width: '50%', title: 'Gender'},
+        {
+            field: 'gender', width: '50%', title: 'Gender', cellSpanFunction: props => {
+
+                let rowSpan = 1;
+                while(props.getCellValue(props.rowIndex,props.colIndex) === props.getCellValue(props.rowIndex+rowSpan,props.colIndex)){
+                    rowSpan++;
+                }
+
+                return {
+                    rowSpan: rowSpan,
+                    colSpan:1
+                }
+
+            }
+        },
         {field: 'cell', width: '100%', title: 'Cell'},
         {field: 'email', width: '100%', title: 'Email'}
     ]);
@@ -31,22 +45,24 @@ export default function App() {
         width: '100%',
         boxSizing: 'border-box',
     }}>
-        <Vertical hAlign={'right'} style={{marginBottom:10}}>
+        <Vertical hAlign={'right'} style={{marginBottom: 10}}>
             <button onClick={() => {
                 setColumns([
                     {
-                        field: 'name', width: 100, title: 'Name', dataItemToValue: (props:any) => {
+                        field: 'name', width: 100, title: 'Name', dataItemToValue: (props: any) => {
                             return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
                         }
                     },
                     {field: 'email', width: '100%', title: 'Email'}
                 ]);
-            }}>Test Update Column</button>
+            }}>Test Update Column
+            </button>
         </Vertical>
         <Vertical style={{overflow: "auto", flexGrow: 1, height: '100%'}}>
-            <Grid data={data} columns={columns} defaultRowHeight={50} focusedDataItem={focusedItem} onFocusedDataItemChange={(newItem) => {
-                setFocusedItem(newItem);
-            }}/>
+            <Grid data={data} columns={columns} defaultRowHeight={50} focusedDataItem={focusedItem}
+                  onFocusedDataItemChange={(newItem) => {
+                      setFocusedItem(newItem);
+                  }}/>
         </Vertical>
     </Vertical>
 }

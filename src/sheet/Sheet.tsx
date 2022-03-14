@@ -32,13 +32,35 @@ interface CalculateInsideViewPort {
     lengths: Map<number, number>
 }
 
+function cellSpanFunctionDefaultImplementation() {
+    return {colSpan: 1, rowSpan: 1}
+}
+
+interface CellSpanFunctionProps {
+    lastRowIndexBeforeViewPort: number;
+    lastRowIndexInsideViewPort: number;
+    lastColIndexBeforeViewPort: number;
+    lastColIndexInsideViewPort: number;
+    rowIndex: number,
+    colIndex: number,
+    dataItem: any;
+    data: Array<any>;
+    columns: Array<Column>,
+    getCellValue: (rowIndex: number, colIndex: number) => any
+}
+
+interface CellSpanFunctionResult {
+    rowSpan?: number;
+    colSpan?: number
+}
 
 export interface Column {
     field: string,
     width: number | string,
     cellComponent?: React.FC<CellComponentStyledProps>,
     cellStyleFunction?: (props: CellComponentProps) => CSSProperties,
-    dataItemToValue?: (props: DataItemToValueProps) => string
+    dataItemToValue?: (props: DataItemToValueProps) => string,
+    cellSpanFunction?: (props: CellSpanFunctionProps) => CellSpanFunctionResult
 }
 
 export interface HeaderCellComponentProps {
@@ -133,10 +155,10 @@ function cellStyleFunctionDefaultImplementation(props: CellStyleFunctionProperti
 type CellClickedCallback = (event: { event: SyntheticEvent<HTMLDivElement>, rowIndex: number, columnIndex: number, dataItem: any, column: Column, value: any, dataSource: Array<any> }) => void;
 
 interface SheetContextType {
-    props?:SheetProperties<any>
+    props?: SheetProperties<any>
 }
 
-const SheetContext = createContext<MutableRefObject<SheetContextType>>({current: {props:undefined}});
+const SheetContext = createContext<MutableRefObject<SheetContextType>>({current: {props: undefined}});
 
 export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
 
@@ -283,26 +305,26 @@ function calculateLength(customLength: Map<number, number> = new Map<number, num
     return totalDefaultLength + totalCustomLength;
 }
 
-interface CellStyleFunctionProperties extends CellRendererProps{
-    focusedItem:any,
-    isFocused:boolean
+interface CellStyleFunctionProperties extends CellRendererProps {
+    focusedItem: any,
+    isFocused: boolean
 }
 
 const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) {
     const sheetContext = useContext(SheetContext);
     const cellStyleFunction = props.column.cellStyleFunction || cellStyleFunctionDefaultImplementation;
     const [$emptyObserver] = useObserver(undefined);
-    const [isFocused,setIsFocused] = useState(() => {
+    const [isFocused, setIsFocused] = useState(() => {
         return props.dataItem === sheetContext.current.props?.$focusedDataItem?.current;
     });
-    useEffect(() => setIsFocused(props.dataItem === sheetContext.current.props?.$focusedDataItem?.current),[props.dataItem]);
-    useObserverListener(sheetContext.current.props?.$focusedDataItem || $emptyObserver,() => {
-        const focusedItem:any = sheetContext.current.props?.$focusedDataItem?.current;
+    useEffect(() => setIsFocused(props.dataItem === sheetContext.current.props?.$focusedDataItem?.current), [props.dataItem]);
+    useObserverListener(sheetContext.current.props?.$focusedDataItem || $emptyObserver, () => {
+        const focusedItem: any = sheetContext.current.props?.$focusedDataItem?.current;
         const isFocused = focusedItem === props.dataItem;
         setIsFocused(isFocused);
     });
-    const focusedItem:any = sheetContext.current.props?.$focusedDataItem?.current;
-    const cellStyle = cellStyleFunction({isFocused,focusedItem,...props});
+    const focusedItem: any = sheetContext.current.props?.$focusedDataItem?.current;
+    const cellStyle = cellStyleFunction({isFocused, focusedItem, ...props});
     const CellComponent = props.column.cellComponent || CellComponentDefaultImplementation;
 
     return <div
@@ -387,6 +409,77 @@ const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) 
 });
 
 
+function calculateCellToBeSkippedDuringRendering(param: { lastColIndexBeforeViewPort: number; data: Array<any>; lastRowIndexBeforeViewPort: number; columns: Array<Column>; lastRowIndexInsideViewPort: number; lastColIndexInsideViewPort: number }) {
+    const {
+        lastColIndexBeforeViewPort,
+        data,
+        lastRowIndexBeforeViewPort,
+        columns,
+        lastRowIndexInsideViewPort,
+        lastColIndexInsideViewPort
+    } = param;
+    // first we iterate over the rows
+    const cellsToBeMerged: Map<number, Set<number>> = new Map<number, Set<number>>();
+    const cellsThatRequestForOtherCellsToBeMerged: Map<number, Set<number>> = new Map<number, Set<number>>();
+    for (let rowIndex = lastRowIndexBeforeViewPort; rowIndex < lastRowIndexInsideViewPort; rowIndex++) {
+        for (let colIndex = lastColIndexBeforeViewPort; colIndex < lastColIndexInsideViewPort; colIndex++) {
+            if (cellsToBeMerged.has(rowIndex) && (cellsToBeMerged.get(rowIndex) || new Set()).has(colIndex)) {
+                continue;
+            }
+            const column: Column = columns[colIndex];
+            const dataItem = data[rowIndex];
+
+            const cellSpanFunction = column.cellSpanFunction || cellSpanFunctionDefaultImplementation;
+
+            const cellSpan = cellSpanFunction({
+                data,
+                dataItem,
+                columns,
+                lastColIndexBeforeViewPort,
+                lastColIndexInsideViewPort,
+                lastRowIndexInsideViewPort,
+                lastRowIndexBeforeViewPort,
+                rowIndex,
+                colIndex,
+                getCellValue: getCellValue(data, column)
+            });
+            const colSpan = cellSpan.colSpan || 1;
+            const rowSpan = cellSpan.rowSpan || 1;
+            if (colSpan > 1 || rowSpan > 1) {
+                // ok this is expanding lets the cell that is not supposed to be visible;
+                if (!cellsThatRequestForOtherCellsToBeMerged.has(rowIndex)) {
+                    cellsThatRequestForOtherCellsToBeMerged.set(rowIndex, new Set());
+                }
+                (cellsThatRequestForOtherCellsToBeMerged.get(rowIndex) || new Set).add(colIndex);
+                for (let rowIndexToMerge = rowIndex; rowIndexToMerge < rowIndex + rowSpan; rowIndexToMerge++) {
+                    for (let colIndexToMerge = colIndex; colIndexToMerge < colIndex + colSpan; colIndexToMerge++) {
+                        if (!cellsToBeMerged.has(rowIndexToMerge)) {
+                            cellsToBeMerged.set(rowIndexToMerge, new Set());
+                        }
+                        (cellsToBeMerged.get(rowIndexToMerge) || new Set()).add(colIndexToMerge);
+                    }
+                }
+            }
+        }
+    }
+
+    cellsThatRequestForOtherCellsToBeMerged.forEach((colIds, rowId) => {
+        colIds.forEach(colId => {
+            (cellsToBeMerged.get(rowId) || new Set()).delete(colId);
+        })
+    });
+
+    return cellsToBeMerged;
+}
+
+function getCellValue(data: Array<any>, column: Column) {
+    return (rowIndex: number, colIndex: number) => {
+        const dataItem = data[rowIndex];
+        const dataItemToValue = column.dataItemToValue || dataItemToValueDefaultImplementation;
+        return dataItemToValue({dataItem, column, colIndex, dataSource: data, rowIndex});
+    };
+}
+
 function renderComponent({
                              numberOfRowInsideViewPort,
                              numberOfRowBeforeViewPort,
@@ -397,12 +490,25 @@ function renderComponent({
                              columns
                          }: RenderComponentProps): void {
 
+
     const heightsOfRowInsideViewPort = numberOfRowInsideViewPort.lengths;
     const totalHeightBeforeViewPort = numberOfRowBeforeViewPort.totalLength;
     const lastRowIndexBeforeViewPort = numberOfRowBeforeViewPort.index;
+    const lastRowIndexInsideViewPort = numberOfRowInsideViewPort.lengths.size + lastRowIndexBeforeViewPort;
     const widthsOfColInsideViewPort = numberOfColInsideViewPort.lengths;
     const lastColIndexBeforeViewPort = numberOfColBeforeViewPort.index;
     const totalWidthBeforeViewPort = numberOfColBeforeViewPort.totalLength;
+    const lastColIndexInsideViewPort = numberOfColInsideViewPort.lengths.size + lastColIndexBeforeViewPort;
+
+
+    const cellToBeSkippedDuringRendering: Map<number, Set<number>> = calculateCellToBeSkippedDuringRendering({
+        lastRowIndexBeforeViewPort,
+        lastColIndexBeforeViewPort,
+        lastRowIndexInsideViewPort,
+        lastColIndexInsideViewPort,
+        columns,
+        data
+    });
 
     const {elements} = Array.from({length: heightsOfRowInsideViewPort.size}).reduce<RowAccumulator>((acc, _, rowIndexInsideViewPort) => {
         const rowIndex = lastRowIndexBeforeViewPort + rowIndexInsideViewPort;
@@ -410,18 +516,49 @@ function renderComponent({
         const {elements} = Array.from({length: widthsOfColInsideViewPort.size}).reduce<ColAccumulator>((colAcc, _, colIndexInsideViewPort) => {
             const colIndex = lastColIndexBeforeViewPort + colIndexInsideViewPort;
             const colWidth = widthsOfColInsideViewPort.get(colIndex) || 0;
+            if ((cellToBeSkippedDuringRendering.get(rowIndex) || new Set()).has(colIndex)) {
+                colAcc.left = colAcc.left + colWidth;
+                return colAcc;
+            }
+
             const column = columns[colIndex];
             const dataItem = data[rowIndex];
             const dataItemToValue = column.dataItemToValue || dataItemToValueDefaultImplementation;
             const value = dataItemToValue({dataItem, column, colIndex, dataSource: data, rowIndex});
+
+            const cellSpanFunction = column.cellSpanFunction || cellSpanFunctionDefaultImplementation;
+            const cellSpan = cellSpanFunction({
+                data,
+                dataItem,
+                columns,
+                lastRowIndexInsideViewPort,
+                lastColIndexInsideViewPort,
+                lastRowIndexBeforeViewPort,
+                lastColIndexBeforeViewPort,
+                rowIndex,
+                colIndex,
+                getCellValue: getCellValue(data, column)
+            });
+            const colSpan = cellSpan.colSpan || 1;
+            const rowSpan = cellSpan.rowSpan || 1;
+            let accumulatedRowHeight = rowHeight;
+            let accumulatedColWidth = colWidth;
+            if (colSpan > 1 || rowSpan > 1) {
+                accumulatedRowHeight = Array.from({length: rowSpan}).reduce((acc: number, _, index: number) => {
+                    return acc + (heightsOfRowInsideViewPort.get(index + rowIndex) || 0);
+                }, 0);
+                accumulatedColWidth = Array.from({length: colSpan}).reduce((acc: number, _, index: number) => {
+                    return acc + (widthsOfColInsideViewPort.get(index + colIndex) || 0);
+                }, 0);
+            }
             colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex}
                                                top={acc.top}
-                                               width={colWidth}
+                                               width={accumulatedColWidth}
                                                dataSource={data}
                                                dataItem={dataItem}
                                                value={value}
                                                column={column}
-                                               left={colAcc.left} height={rowHeight}/>);
+                                               left={colAcc.left} height={accumulatedRowHeight}/>);
             colAcc.left = colAcc.left + colWidth;
             return colAcc;
         }, {elements: [], left: totalWidthBeforeViewPort});
@@ -434,6 +571,9 @@ function renderComponent({
 }
 
 export function dataItemToValueDefaultImplementation(props: DataItemToValueProps) {
-    const value = props.dataItem[props.column.field];
-    return value?.toString()
+    if (props.dataItem) {
+        const value = props.dataItem[props.column.field];
+        return value?.toString()
+    }
+    return '';
 }
