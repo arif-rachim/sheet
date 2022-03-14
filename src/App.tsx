@@ -7,23 +7,27 @@ export default function App() {
     const [data, setData] = useState([]);
     const [columns, setColumns] = useState<Array<GridColumn>>([
         {
-            field: 'name', width: 100, title: 'Name', dataItemToValue: (props: any) => {
+            field: 'name', width: 200, title: 'Name', dataItemToValue: (props: any) => {
                 return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
             }
         },
         {
-            field: 'gender', width: '50%', title: 'Gender', cellSpanFunction: props => {
-
+            field: 'gender', width: '50%', title: 'Gender',
+            cellSpanFunction: props => {
                 let rowSpan = 1;
-                while(props.getCellValue(props.rowIndex,props.colIndex) === props.getCellValue(props.rowIndex+rowSpan,props.colIndex)){
+                while (props.getCellValue(props.rowIndex, props.colIndex) === props.getCellValue(props.rowIndex + rowSpan, props.colIndex)) {
                     rowSpan++;
                 }
-
                 return {
-                    rowSpan: rowSpan,
-                    colSpan:1
+                    rowSpan: rowSpan
                 }
-
+            },
+            cellStyleFunction:props => {
+                return {
+                    background:'#fff',
+                    height:'100%',
+                    textAlign:'center'
+                };
             }
         },
         {field: 'cell', width: '100%', title: 'Cell'},
