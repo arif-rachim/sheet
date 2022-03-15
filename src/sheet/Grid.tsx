@@ -24,7 +24,7 @@ import {useObserverListener} from "react-hook-useobserver/lib";
 
 interface GridProps {
     data: Array<any>,
-    columns: Array<GridColumn>,
+    columns: Array<GridColumnGroup|GridColumn>,
     onFilterChange?: (filterValue: Map<string,any>) => void,
     defaultRowHeight?: number,
     defaultColWidth?: number,
@@ -36,6 +36,11 @@ export interface GridColumn extends Column {
     title: string,
     headerCellComponent?: React.FC<HeaderCellComponentProps>,
     filterCellComponent?: React.FC<HeaderCellComponentProps>
+}
+
+export interface GridColumnGroup{
+    title : string,
+    columns:Array<GridColumnGroup|GridColumn>
 }
 
 const FIRST_COLUMN_WIDTH = 20;
@@ -362,8 +367,43 @@ function filterDataSource(dataSource: Array<any>, $gridFilter:Observer<Map<strin
     });
 }
 
+function convertColumnsPropsToColumns(columnsProp:Array<GridColumn|GridColumnGroup>):Array<GridColumn>{
+    let columns:Array<GridColumn> = [];
+    columnsProp.map((column:any) => {
+        if('columns' in column){
+            columns = columns.concat(column.columns);
+        }else{
+            columns.push(column);
+        }
+    })
+    return columns;
+}
+
+function populateHeaderDataMap(columnsProp: Array<GridColumnGroup | GridColumn>, headerDataMap: Map<number, Map<string, string>>,rowIdx:number,setParentRowField?:(field:string) => void) {
+    columnsProp.forEach((column) => {
+        if (!headerDataMap.has(rowIdx)) {
+            headerDataMap.set(rowIdx, new Map<string, string>());
+        }
+        const row:Map<string,string> = (headerDataMap.get(rowIdx) || new Map<string, string>());
+        if ('columns' in column) {
+            populateHeaderDataMap(column.columns,headerDataMap,rowIdx+1,(field:string) => {
+                if(setParentRowField){
+                    setParentRowField(field);
+                }
+                row.set(field,column.title);
+            });
+        } else {
+            if(setParentRowField){
+                setParentRowField(column.field);
+            }
+            row.set(column.field, column.title);
+        }
+    })
+}
+
 export default function Grid(gridProps: GridProps) {
-    const {data: dataSource, focusedDataItem, columns, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
+    const {data: dataSource, focusedDataItem, columns:columnsProp, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
+    const columns = convertColumnsPropsToColumns(columnsProp);
     const [$data, setData] = useObserver(dataSource);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>());
@@ -405,6 +445,19 @@ export default function Grid(gridProps: GridProps) {
             setCustomColWidth(columnsWidth);
         }
     })
+    const headerDataMap:Map<number,Map<string,string>> = new Map<number, Map<string, string>>();
+    populateHeaderDataMap(columnsProp, headerDataMap,0);
+    headerDataMap.forEach((row, rowId) => {
+        if(rowId>0){
+            const prevRow = headerDataMap.get(rowId-1) || new Map<string, string>();
+            prevRow.forEach((val, key) => {
+                if(!row.has(key)){
+                    row.set(key,val);
+                }
+            })
+        }
+    });
+    console.log('Header datamap',headerDataMap);
     const headerData = useMemo(() => [columns.reduce((acc: any, column: GridColumn) => {
         acc[column.field] = column.title;
         return acc;
@@ -425,6 +478,7 @@ export default function Grid(gridProps: GridProps) {
 
     const gridContextRef = useRef({
         props:gridProps,
+        columns,
         onCellResize: (index:number, width:number) => {
             setCustomColWidth(oldVal => {
                 const newVal = new Map(oldVal);
@@ -438,6 +492,7 @@ export default function Grid(gridProps: GridProps) {
                 newVal.set(index, height);
                 return newVal;
             });
+
         },
         $gridFilter, setGridFilter,
         $gridSort, setGridSort,
@@ -446,7 +501,7 @@ export default function Grid(gridProps: GridProps) {
             if (onFilterChange) {
                 onFilterChange($gridFilter.current)
             } else {
-                const filteredData = filterDataSource(gridContextRef.current.props.data, $gridFilter, gridContextRef.current.props.columns);
+                const filteredData = filterDataSource(gridContextRef.current.props.data, $gridFilter, gridContextRef.current.columns);
                 setData(filteredData);
             }
         }

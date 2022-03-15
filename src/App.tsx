@@ -1,15 +1,23 @@
 import React, {useEffect, useState} from "react";
-import Grid, {GridColumn} from "./sheet/Grid";
+import Grid, {GridColumn, GridColumnGroup} from "./sheet/Grid";
 import {Vertical} from "react-hook-components";
 
 
 export default function App() {
     const [data, setData] = useState([]);
-    const [columns, setColumns] = useState<Array<GridColumn>>([
+    const [columns, setColumns] = useState<Array<GridColumn | GridColumnGroup>>([
         {
-            field: 'name', width: 200, title: 'Name', dataItemToValue: (props: any) => {
-                return `${props.dataItem.name.title} ${props.dataItem.name.first} ${props.dataItem.name.last}`
-            }
+            title: 'Name',
+            columns: [
+                {field: 'name', width: 100, title: 'Title', dataItemToValue: ({dataItem}) => dataItem.name.title},
+                {
+                    title : 'Name Group',
+                    columns : [
+                        {field: 'first', width: 100, title: 'First', dataItemToValue: ({dataItem}) => dataItem.name.first},
+                        {field: 'last', width: 100, title: 'Last', dataItemToValue: ({dataItem}) => dataItem.name.last}
+                    ]
+                }
+            ]
         },
         {
             field: 'gender', width: '50%', title: 'Gender',
@@ -22,11 +30,11 @@ export default function App() {
                     rowSpan: rowSpan
                 }
             },
-            cellStyleFunction:props => {
+            cellStyleFunction: props => {
                 return {
-                    background:'#fff',
-                    height:'100%',
-                    textAlign:'center'
+                    background: '#fff',
+                    height: '100%',
+                    textAlign: 'center'
                 };
             }
         },
