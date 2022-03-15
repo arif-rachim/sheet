@@ -9,12 +9,22 @@ export default function App() {
         {
             title: 'Name',
             columns: [
-                {field: 'name', width: 100, title: 'Title', dataItemToValue: ({dataItem}) => dataItem.name.title},
+                {field: 'name', width: '100%', title: 'Title', dataItemToValue: ({dataItem}) => dataItem?.name?.title},
                 {
-                    title : 'Name Group',
-                    columns : [
-                        {field: 'first', width: 100, title: 'First', dataItemToValue: ({dataItem}) => dataItem.name.first},
-                        {field: 'last', width: 100, title: 'Last', dataItemToValue: ({dataItem}) => dataItem.name.last}
+                    title: 'Name Group',
+                    columns: [
+                        {
+                            field: 'first',
+                            width: 100,
+                            title: 'First',
+                            dataItemToValue: ({dataItem}) => dataItem?.name?.first
+                        },
+                        {
+                            field: 'last',
+                            width: 100,
+                            title: 'Last',
+                            dataItemToValue: ({dataItem}) => dataItem?.name?.last
+                        }
                     ]
                 }
             ]
@@ -30,7 +40,7 @@ export default function App() {
                     rowSpan: rowSpan
                 }
             },
-            cellStyleFunction: props => {
+            cellStyleFunction: () => {
                 return {
                     background: '#fff',
                     height: '100%',
@@ -46,11 +56,10 @@ export default function App() {
         (async () => {
             const response = await fetch('./person.json');
             const data: any = await response.json();
-
             setData(data.results);
         })();
 
-    }, [])
+    }, []);
     return <Vertical style={{
         padding: 10,
         height: '100%',

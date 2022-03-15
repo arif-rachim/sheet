@@ -49,7 +49,7 @@ interface CellSpanFunctionProps {
     getCellValue: (rowIndex: number, colIndex: number) => any
 }
 
-interface CellSpanFunctionResult {
+export interface CellSpanFunctionResult {
     rowSpan?: number;
     colSpan?: number
 }
@@ -63,12 +63,6 @@ export interface Column {
     cellSpanFunction?: (props: CellSpanFunctionProps) => CellSpanFunctionResult
 }
 
-export interface HeaderCellComponentProps {
-    field: string,
-    title: string,
-    column: Column,
-    colIndex: number,
-}
 
 interface SheetProperties<DataItem> {
     data: Array<DataItem>,
@@ -100,7 +94,9 @@ interface DataItemToValueProps {
 }
 
 export interface CellComponentProps extends DataItemToValueProps {
-    value: any
+    value: any,
+    colSpan: number,
+    rowSpan: number
 }
 
 interface CellRendererProps extends CellComponentProps {
@@ -108,7 +104,7 @@ interface CellRendererProps extends CellComponentProps {
     width: number,
     top: number,
     left: number,
-    style?: CSSProperties,
+    style?: CSSProperties
 }
 
 export interface CellComponentStyledProps extends CellComponentProps {
@@ -161,7 +157,6 @@ interface SheetContextType {
 const SheetContext = createContext<MutableRefObject<SheetContextType>>({current: {props: undefined}});
 
 export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
-
     const sheetContextRef = useRef<SheetContextType>({props});
     sheetContextRef.current = {props};
     const [$reRender, setReRender] = useObserver(new Date());
@@ -206,6 +201,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     }, []);
 
     useObserverListener([$reRender, $viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight || $emptyMapObserver, $customColWidth || $emptyMapObserver], () => {
+
         const scrollerPosition = $scrollerPosition.current;
         const defaultRowHeight = $defaultRowHeight.current;
         const defaultColWidth = $defaultColWidth.current;
@@ -403,6 +399,8 @@ const CellRenderer = React.memo(function CellRenderer(props: CellRendererProps) 
             rowIndex={props.rowIndex}
             colIndex={props.colIndex}
             cellStyle={cellStyle}
+            rowSpan={props.rowSpan}
+            colSpan={props.colSpan}
         />
 
     </div>
@@ -539,8 +537,8 @@ function renderComponent({
                 colIndex,
                 getCellValue: getCellValue(data, column)
             });
-            const colSpan = cellSpan.colSpan || 1;
-            const rowSpan = cellSpan.rowSpan || 1;
+            const colSpan:number = cellSpan.colSpan || 1;
+            const rowSpan:number = cellSpan.rowSpan || 1;
             let accumulatedRowHeight = rowHeight;
             let accumulatedColWidth = colWidth;
             if (colSpan > 1 || rowSpan > 1) {
@@ -551,14 +549,22 @@ function renderComponent({
                     return acc + (widthsOfColInsideViewPort.get(index + colIndex) || 0);
                 }, 0);
             }
-            colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`} rowIndex={rowIndex} colIndex={colIndex}
+            colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`}
+                                               rowIndex={rowIndex}
+                                               colIndex={colIndex}
                                                top={acc.top}
                                                width={accumulatedColWidth}
                                                dataSource={data}
                                                dataItem={dataItem}
                                                value={value}
                                                column={column}
-                                               left={colAcc.left} height={accumulatedRowHeight}/>);
+                                               left={colAcc.left}
+                                               height={accumulatedRowHeight}
+                                               colSpan={colSpan}
+                                               rowSpan={rowSpan}
+
+            />);
+
             colAcc.left = colAcc.left + colWidth;
             return colAcc;
         }, {elements: [], left: totalWidthBeforeViewPort});
