@@ -451,7 +451,9 @@ function constructHeaderData(columnsProp: Array<GridColumnGroup | GridColumn>) {
 
 export default function Grid(gridProps: GridProps) {
     const {data: dataSource, focusedDataItem, columns: columnsProp, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
-    const columns = convertColumnsPropsToColumns(columnsProp);
+
+    const [$columns,setColumns] = useObserver(() => convertColumnsPropsToColumns(columnsProp));
+
     const [$data, setData] = useObserver(dataSource);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>());
@@ -465,14 +467,14 @@ export default function Grid(gridProps: GridProps) {
     const viewportRef = useRef(defaultDif);
     useEffect(() => setViewPortDimension(viewportRef.current.getBoundingClientRect()), []);
     useEffect(() => setFocusedDataItem(focusedDataItem), [focusedDataItem]);
-    useObserverListener($viewPortDimension, () => {
+    useObserverListener([$viewPortDimension,$columns], () => {
         if ($viewPortDimension.current.width > 0) {
             const columnsWidth = new Map<number, number>();
             const columnsWidthPercentage = new Map<number, number>();
             let totalColumnsWidth = 0;
             let totalPercentage = 0;
             const viewPortWidth = $viewPortDimension.current.width;
-            columns.forEach((column, columnIndex) => {
+            $columns.current.forEach((column, columnIndex) => {
                 if (typeof column.width === 'number') {
                     totalColumnsWidth += column.width;
                     columnsWidth.set(columnIndex, column.width);
@@ -495,6 +497,7 @@ export default function Grid(gridProps: GridProps) {
     });
     const headerData: Array<any> = useMemo(constructHeaderData(columnsProp), []);
     useEffect(() => setData(dataSource), [dataSource]);
+    useEffect(() => setColumns(convertColumnsPropsToColumns(columnsProp)),[columnsProp])
     const columnDataToResizeRow: Array<GridColumn> = useMemo(() => ([{
         field: '_',
         width: FIRST_COLUMN_WIDTH,
@@ -502,40 +505,43 @@ export default function Grid(gridProps: GridProps) {
         cellComponent: CellComponentToResizeRow
     }]), []);
 
-    const columnsHeaderColumn = useMemo(() => columns.map<Column>((c: Column) => ({
-        ...c,
-        //cellComponent:CellHeaderComponentDefaultImplementation,
-        cellComponent: CellComponentForColumnHeaderBase,
-        cellSpanFunction: props => {
-            let rowSpan = 1;
-            let colSpan = 1;
+    const columnsHeaderColumn = useObserverValue($columns,(columns:Array<GridColumn>) => {
+        return columns.map<Column>((c: Column) => ({
+            ...c,
+            //cellComponent:CellHeaderComponentDefaultImplementation,
+            cellComponent: CellComponentForColumnHeaderBase,
+            cellSpanFunction: props => {
+                let rowSpan = 1;
+                let colSpan = 1;
 
-            function getCellTitle(rowIndex: number, colIndex: number) {
-                const rowData = props.data[rowIndex];
-                const column = props.columns[colIndex];
-                if (rowData && column) {
-                    return rowData[column.field];
+                function getCellTitle(rowIndex: number, colIndex: number) {
+                    const rowData = props.data[rowIndex];
+                    const column = props.columns[colIndex];
+                    if (rowData && column) {
+                        return rowData[column.field];
+                    }
+                    return '';
                 }
-                return '';
-            }
 
-            const cellTitle = getCellTitle(props.rowIndex, props.colIndex);
-            while (rowSpan <= props.lastRowIndexInsideViewPort && cellTitle === getCellTitle(props.rowIndex + rowSpan, props.colIndex)) {
-                rowSpan++;
-            }
-            while (colSpan <= props.lastColIndexInsideViewPort && cellTitle === getCellTitle(props.rowIndex, props.colIndex + colSpan)) {
-                colSpan++;
-            }
-            return {
-                rowSpan,
-                colSpan
-            }
-        },
-    })), [columns]);
+                const cellTitle = getCellTitle(props.rowIndex, props.colIndex);
+                while (rowSpan <= props.lastRowIndexInsideViewPort && cellTitle === getCellTitle(props.rowIndex + rowSpan, props.colIndex)) {
+                    rowSpan++;
+                }
+                while (colSpan <= props.lastColIndexInsideViewPort && cellTitle === getCellTitle(props.rowIndex, props.colIndex + colSpan)) {
+                    colSpan++;
+                }
+                return {
+                    rowSpan,
+                    colSpan
+                }
+            },
+        }))
+    })
+    //const columnsHeaderColumn = useMemo(() => ), [columns]);
 
     const gridContextRef = useRef({
         props: gridProps,
-        columns,
+        columns:$columns.current,
         onCellResize: (index: number, width: number) => {
             setCustomColWidth(oldVal => {
                 const newVal = new Map(oldVal);
@@ -565,10 +571,10 @@ export default function Grid(gridProps: GridProps) {
     });
     gridContextRef.current.props = gridProps;
     const sheetDataToResizeRow = useMemo(() => dataSource.map(() => ({_: ''})), [dataSource]);
-    useObserverListener($gridSort, () => {
+    useObserverListener([$gridSort,$columns], () => {
         const gridSort: Array<GridSortItem> = $gridSort.current;
         const clonedData = [...dataSource];
-        clonedData.sort((prev: any, next: any) => compareValue({prev, next, gridSort, index: 0, columns, dataSource}));
+        clonedData.sort((prev: any, next: any) => compareValue({prev, next, gridSort, index: 0, columns:$columns.current, dataSource}));
         setData(clonedData);
     });
 
@@ -606,9 +612,9 @@ export default function Grid(gridProps: GridProps) {
                     />
                 </Vertical>
                 <Vertical ref={viewportRef} style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
-                    <ObserverValue observers={$data} render={() => {
+                    <ObserverValue observers={[$data,$columns]} render={() => {
 
-                        return <Sheet data={$data.current} columns={columns}
+                        return <Sheet data={$data.current} columns={$columns.current}
                                       $customRowHeight={$customRowHeight}
                                       $customColWidth={$customColWidth}
                                       onScroll={({scrollLeft, scrollTop}) => {

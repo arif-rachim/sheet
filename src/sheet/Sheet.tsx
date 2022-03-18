@@ -163,7 +163,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     const forceUpdate = useCallback(() => setReRender(new Date()), []);
     useEffect(() => {
         forceUpdate();
-    }, [props.data]);
+    }, [props.data,props.columns]);
     const {$customColWidth, $customRowHeight} = props;
     const [$defaultRowHeight,] = useObserver(props.defaultRowHeight || DEFAULT_HEIGHT);
     const [$defaultColWidth,] = useObserver(props.defaultColWidth || DEFAULT_WIDTH);
