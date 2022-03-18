@@ -160,10 +160,6 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     const sheetContextRef = useRef<SheetContextType>({props});
     sheetContextRef.current = {props};
     const [$reRender, setReRender] = useObserver(new Date());
-    const forceUpdate = useCallback(() => setReRender(new Date()), []);
-    useEffect(() => {
-        forceUpdate();
-    }, [props.data,props.columns]);
     const {$customColWidth, $customRowHeight} = props;
     const [$defaultRowHeight,] = useObserver(props.defaultRowHeight || DEFAULT_HEIGHT);
     const [$defaultColWidth,] = useObserver(props.defaultColWidth || DEFAULT_WIDTH);
@@ -172,9 +168,12 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
         left: props.$scrollLeft?.current || 0,
         top: props.$scrollTop?.current || 0
     });
-    const [elements, setElements] = useState(new Array<ReactElement>());
     const [$emptyObserver] = useObserver(0);
     const [$emptyMapObserver] = useObserver(new Map<number, number>());
+    const [elements, setElements] = useState(new Array<ReactElement>());
+    const forceUpdate = useCallback(() => setReRender(new Date()), []);
+    useEffect(forceUpdate, [props.data,props.columns]);
+
     useObserverListener([props.$scrollTop || $emptyObserver, props.$scrollLeft || $emptyObserver], () => {
         const left = props.$scrollLeft?.current || 0;
         const top = props.$scrollTop?.current || 0;
@@ -182,15 +181,14 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
         viewPortRef.current.scrollTop = top;
         setScrollerPosition({left, top})
     });
+
     const [$totalWidthOfContent, setTotalWidthOfContent] = useObserver(calculateLength($customColWidth?.current, props.columns, $defaultColWidth.current));
     useObserverListener($customColWidth || $emptyMapObserver, () => setTotalWidthOfContent(calculateLength($customColWidth?.current, props.columns, $defaultColWidth.current)));
 
     const [$totalHeightOfContent, setTotalHeightOfContent] = useObserver(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current));
     useObserverListener($customRowHeight || $emptyMapObserver, () => setTotalHeightOfContent(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current)));
 
-    useEffect(() => {
-        setTotalHeightOfContent(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current))
-    }, [props.data]);
+    useEffect(() => setTotalHeightOfContent(calculateLength($customRowHeight?.current, props.data, $defaultRowHeight.current)), [props.data]);
 
     const viewPortRef = useRef(defaultDom);
 
@@ -232,6 +230,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
             scrollTop: viewPortDom.scrollTop
         })
     }, []);
+
     return <SheetContext.Provider value={sheetContextRef}>
         <div ref={viewPortRef}
              style={{
@@ -511,6 +510,7 @@ function renderComponent({
     const {elements} = Array.from({length: heightsOfRowInsideViewPort.size}).reduce<RowAccumulator>((acc, _, rowIndexInsideViewPort) => {
         const rowIndex = lastRowIndexBeforeViewPort + rowIndexInsideViewPort;
         const rowHeight = heightsOfRowInsideViewPort.get(rowIndex) || 0;
+
         const {elements} = Array.from({length: widthsOfColInsideViewPort.size}).reduce<ColAccumulator>((colAcc, _, colIndexInsideViewPort) => {
             const colIndex = lastColIndexBeforeViewPort + colIndexInsideViewPort;
             const colWidth = widthsOfColInsideViewPort.get(colIndex) || 0;

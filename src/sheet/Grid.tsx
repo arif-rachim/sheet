@@ -450,18 +450,17 @@ function constructHeaderData(columnsProp: Array<GridColumnGroup | GridColumn>) {
 }
 
 export default function Grid(gridProps: GridProps) {
-    const {data: dataSource, focusedDataItem, columns: columnsProp, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
+    const {data: dataProp, focusedDataItem, columns: columnsProp, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
 
     const [$columns,setColumns] = useObserver(() => convertColumnsPropsToColumns(columnsProp));
 
-    const [$data, setData] = useObserver(dataSource);
+    const [$data, setData] = useObserver(dataProp);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>());
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
     const [$scrollLeft, setScrollLeft] = useObserver(0);
     const [$scrollTop, setScrollTop] = useObserver(0);
     const [$gridFilter, setGridFilter] = useObserver(new Map<string, any>());
-
     const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
     const [$focusedDataItem, setFocusedDataItem] = useObserver(focusedDataItem);
     const viewportRef = useRef(defaultDif);
@@ -496,7 +495,7 @@ export default function Grid(gridProps: GridProps) {
         }
     });
     const headerData: Array<any> = useMemo(constructHeaderData(columnsProp), []);
-    useEffect(() => setData(dataSource), [dataSource]);
+    useEffect(() => setData(dataProp), [dataProp]);
     useEffect(() => setColumns(convertColumnsPropsToColumns(columnsProp)),[columnsProp])
     const columnDataToResizeRow: Array<GridColumn> = useMemo(() => ([{
         field: '_',
@@ -508,7 +507,6 @@ export default function Grid(gridProps: GridProps) {
     const columnsHeaderColumn = useObserverValue($columns,(columns:Array<GridColumn>) => {
         return columns.map<Column>((c: Column) => ({
             ...c,
-            //cellComponent:CellHeaderComponentDefaultImplementation,
             cellComponent: CellComponentForColumnHeaderBase,
             cellSpanFunction: props => {
                 let rowSpan = 1;
@@ -537,7 +535,6 @@ export default function Grid(gridProps: GridProps) {
             },
         }))
     })
-    //const columnsHeaderColumn = useMemo(() => ), [columns]);
 
     const gridContextRef = useRef({
         props: gridProps,
@@ -570,11 +567,11 @@ export default function Grid(gridProps: GridProps) {
         }
     });
     gridContextRef.current.props = gridProps;
-    const sheetDataToResizeRow = useMemo(() => dataSource.map(() => ({_: ''})), [dataSource]);
+    const sheetDataToResizeRow = useMemo(() => dataProp.map(() => ({_: ''})), [dataProp]);
     useObserverListener([$gridSort,$columns], () => {
         const gridSort: Array<GridSortItem> = $gridSort.current;
-        const clonedData = [...dataSource];
-        clonedData.sort((prev: any, next: any) => compareValue({prev, next, gridSort, index: 0, columns:$columns.current, dataSource}));
+        const clonedData = [...dataProp];
+        clonedData.sort((prev: any, next: any) => compareValue({prev, next, gridSort, index: 0, columns:$columns.current, dataSource: dataProp}));
         setData(clonedData);
     });
 
