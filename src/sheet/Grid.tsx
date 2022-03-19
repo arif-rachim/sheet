@@ -332,40 +332,14 @@ function compareValue(props: { prev: any, next: any, gridSort: Array<GridSortIte
         rowIndex: dataSource.indexOf(next),
         dataSource
     });
-    if (typeof prevValue === 'string' && typeof nextValue === 'string') {
-        const prevLowerCase = prevValue.toLowerCase();
-        const nextLowerCase = nextValue.toLowerCase();
-        if (prevLowerCase === nextLowerCase) {
-            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
-        }
-        const val = prevLowerCase > nextLowerCase ? 1 : -1;
-        return isAsc ? val : isDesc ? -val : 0
+    const prevLowerCase = prevValue.toLowerCase();
+    const nextLowerCase = nextValue.toLowerCase();
+    if (prevLowerCase === nextLowerCase) {
+        return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
     }
-    if (typeof prevValue === 'number' && typeof nextValue === 'number') {
-        if (prevValue === nextValue) {
-            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
-        }
-        const val = prevValue - nextValue;
-        return isAsc ? val : isDesc ? -val : 0;
-    }
-    if (prevValue instanceof Date && nextValue instanceof Date) {
-        const prevValueTime = prevValue.getTime();
-        const nextValueTime = nextValue.getTime();
-        if (prevValue === nextValue) {
-            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
-        }
-        const val = prevValueTime - nextValueTime;
-        return isAsc ? val : isDesc ? -val : 0;
+    const val = prevLowerCase > nextLowerCase ? 1 : -1;
+    return isAsc ? val : isDesc ? -val : 0
 
-    }
-    if (typeof prevValue === 'boolean' && typeof nextValue === 'boolean') {
-        if (prevValue === nextValue) {
-            return compareValue({prev, next, gridSort, index: index + 1, columns, dataSource});
-        }
-        const val = prevValue ? 1 : -1;
-        return isAsc ? val : isDesc ? -val : 0;
-    }
-    return 0;
 }
 
 function filterDataSource(dataSource: Array<any>, $gridFilter: Observer<Map<string, number>>, columns: Array<GridColumn>) {
@@ -577,7 +551,7 @@ export default function Grid(gridProps: GridProps) {
 
     return <Vertical style={{height: '100%', width: '100%',overflow:'auto'}}>
         <GridContext.Provider value={gridContextRef}>
-            <Horizontal style={{overflow:'auto'}}>
+            <Horizontal >
                 <Vertical style={{
                     flexBasis: FIRST_COLUMN_WIDTH,
                     flexShrink: 0,
