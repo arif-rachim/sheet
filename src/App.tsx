@@ -48,8 +48,8 @@ export default function App() {
                 };
             }
         },
-        {field: 'cell', width: '100%', title: 'Cell'},
-        {field: 'email', width: '100%', title: 'Email'}
+        {field: 'cell', width: 800, title: 'Cell'},
+        {field: 'email', width: 800, title: 'Email'}
     ]);
     const [focusedItem, setFocusedItem] = useState(undefined);
     useEffect(() => {

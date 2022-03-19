@@ -575,9 +575,9 @@ export default function Grid(gridProps: GridProps) {
         setData(clonedData);
     });
 
-    return <Vertical style={{height: '100%', width: '100%'}}>
+    return <Vertical style={{height: '100%', width: '100%',overflow:'auto'}}>
         <GridContext.Provider value={gridContextRef}>
-            <Horizontal>
+            <Horizontal style={{overflow:'auto'}}>
                 <Vertical style={{
                     flexBasis: FIRST_COLUMN_WIDTH,
                     flexShrink: 0,
@@ -597,7 +597,7 @@ export default function Grid(gridProps: GridProps) {
 
                 </Vertical>
             </Horizontal>
-            <Horizontal style={{height: `calc(100% - ${HEADER_HEIGHT}px)`, width: '100%'}}>
+            <Horizontal style={{height: `calc(100% - ${HEADER_HEIGHT}px)`, width: '100%',overflow:'auto'}}>
                 <Vertical style={{flexBasis: FIRST_COLUMN_WIDTH, flexShrink: 0, flexGrow: 0}}>
                     <Sheet data={sheetDataToResizeRow}
                            columns={columnDataToResizeRow}
@@ -608,7 +608,7 @@ export default function Grid(gridProps: GridProps) {
                            defaultRowHeight={defaultRowHeight}
                     />
                 </Vertical>
-                <Vertical ref={viewportRef} style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
+                <Vertical ref={viewportRef} style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`,overflow:'auto'}}>
                     <ObserverValue observers={[$data,$columns]} render={() => {
 
                         return <Sheet data={$data.current} columns={$columns.current}
