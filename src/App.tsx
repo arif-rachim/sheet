@@ -83,7 +83,8 @@ export default function App() {
             <Grid data={data} columns={columns} defaultRowHeight={50} focusedDataItem={focusedItem}
                   onFocusedDataItemChange={(newItem) => {
                       setFocusedItem(newItem);
-                  }}/>
+                  }}
+            />
         </Vertical>
     </Vertical>
 }

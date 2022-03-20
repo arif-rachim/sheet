@@ -41,6 +41,8 @@ export interface GridColumnGroup {
 const FIRST_COLUMN_WIDTH = 20;
 const HANDLER_LENGTH = 7;
 const HEADER_HEIGHT = 50;
+const DEFAULT_HEIGHT = 25;
+const DEFAULT_WIDTH = 70;
 
 const CellComponentForColumnHeaderBase: FC<CellComponentProps> = (props) => {
     const index = props.colIndex;
@@ -424,8 +426,9 @@ function constructHeaderData(columnsProp: Array<GridColumnGroup | GridColumn>) {
 }
 
 export default function Grid(gridProps: GridProps) {
-    const {data: dataProp, focusedDataItem, columns: columnsProp, onFilterChange, defaultRowHeight, defaultColWidth} = gridProps;
-
+    const {data: dataProp, focusedDataItem, columns: columnsProp, onFilterChange, defaultRowHeight:_defaultRowHeight, defaultColWidth:_defaultCoWidth} = gridProps;
+    const defaultRowHeight = _defaultRowHeight || DEFAULT_HEIGHT;
+    const defaultColWidth = _defaultCoWidth || DEFAULT_WIDTH;
     const [$columns,setColumns] = useObserver(() => convertColumnsPropsToColumns(columnsProp));
 
     const [$data, setData] = useObserver(dataProp);
@@ -463,6 +466,10 @@ export default function Grid(gridProps: GridProps) {
                 columnsWidthPercentage.forEach((value, key) => {
                     const width = (value / totalPercentage) * remainingWidth;
                     columnsWidth.set(key, width);
+                });
+            }else{
+                columnsWidthPercentage.forEach((value, key) => {
+                    columnsWidth.set(key, defaultColWidth || 0);
                 });
             }
             setCustomColWidth(columnsWidth);
@@ -559,7 +566,7 @@ export default function Grid(gridProps: GridProps) {
                     borderRight: '1px solid #ddd',
                     borderBottom: '1px solid #ddd'
                 }}/>
-                <Vertical style={{width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`}}>
+                <Vertical style={{flexGrow:1,overflow:'auto'}}>
                     <Sheet data={headerData}
                            columns={columnsHeaderColumn}
                            $customColWidth={$customColWidth}
@@ -568,7 +575,6 @@ export default function Grid(gridProps: GridProps) {
                            defaultRowHeight={HEADER_HEIGHT}
                            defaultColWidth={defaultColWidth}
                     />
-
                 </Vertical>
             </Horizontal>
             <Horizontal style={{height: `calc(100% - ${HEADER_HEIGHT}px)`, width: '100%',overflow:'auto'}}>
@@ -582,9 +588,8 @@ export default function Grid(gridProps: GridProps) {
                            defaultRowHeight={defaultRowHeight}
                     />
                 </Vertical>
-                <Vertical ref={viewportRef} style={{height: '100%', width: `calc(100% - ${FIRST_COLUMN_WIDTH}px)`,overflow:'auto'}}>
+                <Vertical ref={viewportRef} style={{height: '100%', flexGrow:1,overflow:'auto'}}>
                     <ObserverValue observers={[$data,$columns]} render={() => {
-
                         return <Sheet data={$data.current} columns={$columns.current}
                                       $customRowHeight={$customRowHeight}
                                       $customColWidth={$customColWidth}

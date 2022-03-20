@@ -15,8 +15,6 @@ import {Observer} from "react-hook-useobserver/lib/useObserver";
 import {Vertical} from "react-hook-components";
 
 const BORDER = '1px solid rgba(0,0,0,0.1)';
-const DEFAULT_HEIGHT = 25;
-const DEFAULT_WIDTH = 70;
 
 
 interface CalculateBeforeViewPort {
@@ -75,8 +73,8 @@ interface SheetProperties<DataItem> {
     $scrollLeft?: Observer<number>,
     $scrollTop?: Observer<number>,
     showScroller?: boolean,
-    defaultColWidth?: number,
-    defaultRowHeight?: number,
+    defaultColWidth: number,
+    defaultRowHeight: number,
     onCellClicked?: CellClickedCallback,
     onCellClickedCapture?: CellClickedCallback,
     onCellDoubleClicked?: CellClickedCallback,
@@ -161,8 +159,8 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     sheetContextRef.current = {props};
     const [$reRender, setReRender] = useObserver(new Date());
     const {$customColWidth, $customRowHeight} = props;
-    const [$defaultRowHeight,] = useObserver(props.defaultRowHeight || DEFAULT_HEIGHT);
-    const [$defaultColWidth,] = useObserver(props.defaultColWidth || DEFAULT_WIDTH);
+    const [$defaultRowHeight,] = useObserver(props.defaultRowHeight);
+    const [$defaultColWidth,] = useObserver(props.defaultColWidth);
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$scrollerPosition, setScrollerPosition] = useObserver({
         left: props.$scrollLeft?.current || 0,
