@@ -9,7 +9,7 @@ export default function App() {
         {
             title: 'Name',
             columns: [
-                {field: 'name', width: '100%', title: 'Title', dataItemToValue: ({dataItem}) => dataItem?.name?.title},
+                {field: 'name', width: 100, title: 'Title', dataItemToValue: ({dataItem}) => dataItem?.name?.title},
                 {
                     title: 'Name Group',
                     columns: [
@@ -30,7 +30,7 @@ export default function App() {
             ]
         },
         {
-            field: 'gender', width: '50%', title: 'Gender',
+            field: 'gender', width: '10%', title: 'Gender',
             cellSpanFunction: props => {
                 let rowSpan = 1;
                 while (props.getCellValue(props.rowIndex, props.colIndex) === props.getCellValue(props.rowIndex + rowSpan, props.colIndex)) {
@@ -48,8 +48,8 @@ export default function App() {
                 };
             }
         },
-        {field: 'cell', width: 800, title: 'Cell'},
-        {field: 'email', width: 800, title: 'Email'}
+        {field: 'cell', width: '10%', title: 'Cell'},
+        {field: 'email', width: '10%', title: 'Email'}
     ]);
     const [focusedItem, setFocusedItem] = useState(undefined);
     useEffect(() => {
@@ -81,9 +81,8 @@ export default function App() {
         </Vertical>
         <Vertical style={{overflow: "auto", flexGrow: 1, height: '100%'}}>
             <Grid data={data} columns={columns} defaultRowHeight={50} focusedDataItem={focusedItem}
-                  onFocusedDataItemChange={(newItem) => {
-                      setFocusedItem(newItem);
-                  }}
+                  onFocusedDataItemChange={(newItem) => setFocusedItem(newItem)}
+                  pinnedLeftColumnIndex={-1}
             />
         </Vertical>
     </Vertical>

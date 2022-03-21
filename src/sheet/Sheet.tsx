@@ -79,6 +79,7 @@ interface SheetProperties<DataItem> {
     onCellClickedCapture?: CellClickedCallback,
     onCellDoubleClicked?: CellClickedCallback,
     onCellDoubleClickedCapture?: CellClickedCallback,
+    hideLeftColumnIndex: number,
     $focusedDataItem?: Observer<any>
 
 }
@@ -126,7 +127,8 @@ interface RenderComponentProps {
     numberOfColBeforeViewPort: CalculateBeforeViewPort,
     data: Array<any>,
     columns: Array<Column>,
-    setElements: React.Dispatch<React.SetStateAction<React.ReactElement[]>>
+    setElements: React.Dispatch<React.SetStateAction<React.ReactElement[]>>,
+    hideLeftColumnIndex: number
 }
 
 const defaultDom = document.createElement('div');
@@ -170,7 +172,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
     const [$emptyMapObserver] = useObserver(new Map<number, number>());
     const [elements, setElements] = useState(new Array<ReactElement>());
     const forceUpdate = useCallback(() => setReRender(new Date()), []);
-    useEffect(forceUpdate, [props.data,props.columns]);
+    useEffect(forceUpdate, [props.data, props.columns]);
 
     useObserverListener([props.$scrollTop || $emptyObserver, props.$scrollLeft || $emptyObserver], () => {
         const left = props.$scrollLeft?.current || 0;
@@ -192,9 +194,9 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
 
     useEffect(() => {
         const viewPortDom = viewPortRef.current;
-        const {offsetWidth, offsetHeight} = viewPortDom;
+        let {offsetWidth, offsetHeight} = viewPortDom;
         setViewPortDimension({width: offsetWidth, height: offsetHeight});
-    }, []);
+    }, [props.styleContainer]);
 
     useObserverListener([$reRender, $viewPortDimension, $scrollerPosition, $defaultRowHeight, $defaultColWidth, $customRowHeight || $emptyMapObserver, $customColWidth || $emptyMapObserver], () => {
 
@@ -217,6 +219,7 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
             setElements,
             data: props.data,
             columns: props.columns,
+            hideLeftColumnIndex: props.hideLeftColumnIndex
         });
     });
 
@@ -228,7 +231,6 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
             scrollTop: viewPortDom.scrollTop
         })
     }, []);
-
     return <SheetContext.Provider value={sheetContextRef}>
         <div ref={viewPortRef}
              style={{
@@ -236,13 +238,12 @@ export default function Sheet<DataItem>(props: SheetProperties<DataItem>) {
                  height: '100%',
                  overflow: props.showScroller === false ? 'hidden' : 'auto',
                  boxSizing: 'border-box',
-                 ...props.styleContainer
+                 backgroundColor:'#fefefe',
              }} onScroll={handleScroller}>
             <div style={{
                 width: $totalWidthOfContent.current,
                 height: $totalHeightOfContent.current,
                 boxSizing: 'border-box',
-                backgroundColor: '#f6f6f6',
                 position: 'relative', ...props.styleViewPort
             }}>
                 {elements}
@@ -482,7 +483,8 @@ function renderComponent({
                              numberOfColBeforeViewPort,
                              setElements,
                              data,
-                             columns
+                             columns,
+                             hideLeftColumnIndex
                          }: RenderComponentProps): void {
 
 
@@ -535,8 +537,8 @@ function renderComponent({
                 colIndex,
                 getCellValue: getCellValue(data, column)
             });
-            const colSpan:number = cellSpan.colSpan || 1;
-            const rowSpan:number = cellSpan.rowSpan || 1;
+            const colSpan: number = cellSpan.colSpan || 1;
+            const rowSpan: number = cellSpan.rowSpan || 1;
             let accumulatedRowHeight = rowHeight;
             let accumulatedColWidth = colWidth;
             if (colSpan > 1 || rowSpan > 1) {
@@ -547,21 +549,23 @@ function renderComponent({
                     return acc + (widthsOfColInsideViewPort.get(index + colIndex) || 0);
                 }, 0);
             }
-            colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`}
-                                               rowIndex={rowIndex}
-                                               colIndex={colIndex}
-                                               top={acc.top}
-                                               width={accumulatedColWidth}
-                                               dataSource={data}
-                                               dataItem={dataItem}
-                                               value={value}
-                                               column={column}
-                                               left={colAcc.left}
-                                               height={accumulatedRowHeight}
-                                               colSpan={colSpan}
-                                               rowSpan={rowSpan}
+            if(colIndex > hideLeftColumnIndex){
+                colAcc.elements.push(<CellRenderer key={`${rowIndex}-${colIndex}`}
+                                                   rowIndex={rowIndex}
+                                                   colIndex={colIndex}
+                                                   top={acc.top}
+                                                   width={accumulatedColWidth}
+                                                   dataSource={data}
+                                                   dataItem={dataItem}
+                                                   value={value}
+                                                   column={column}
+                                                   left={colAcc.left}
+                                                   height={accumulatedRowHeight}
+                                                   colSpan={colSpan}
+                                                   rowSpan={rowSpan}
 
-            />);
+                />);
+            }
 
             colAcc.left = colAcc.left + colWidth;
             return colAcc;
