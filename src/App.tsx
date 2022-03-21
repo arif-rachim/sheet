@@ -48,8 +48,8 @@ export default function App() {
                 };
             }
         },
-        {field: 'cell', width: '10%', title: 'Cell'},
-        {field: 'email', width: '10%', title: 'Email'}
+        {field: 'cell', width: 800, title: 'Cell'},
+        {field: 'email', width: 800, title: 'Email'}
     ]);
     const [focusedItem, setFocusedItem] = useState(undefined);
     useEffect(() => {
@@ -82,7 +82,7 @@ export default function App() {
         <Vertical style={{overflow: "auto", flexGrow: 1, height: '100%'}}>
             <Grid data={data} columns={columns} defaultRowHeight={50} focusedDataItem={focusedItem}
                   onFocusedDataItemChange={(newItem) => setFocusedItem(newItem)}
-                  pinnedLeftColumnIndex={-1}
+                  pinnedLeftColumnIndex={2}
             />
         </Vertical>
     </Vertical>

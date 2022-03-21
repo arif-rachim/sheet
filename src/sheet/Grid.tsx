@@ -1,5 +1,5 @@
 import {Horizontal, Vertical} from "react-hook-components";
-import Sheet, {CellComponentProps, Column, dataItemToValueDefaultImplementation} from "./Sheet";
+import Sheet, {CellComponentProps, Column, dataItemToValueDefaultImplementation, SheetRef} from "./Sheet";
 import {ObserverValue, useObserver, useObserverValue} from "react-hook-useobserver";
 import React, {
     createContext,
@@ -439,13 +439,17 @@ export default function Grid(gridProps: GridProps) {
     const [$viewPortDimension, setViewPortDimension] = useObserver({width: 0, height: 0});
     const [$customColWidth, setCustomColWidth] = useObserver(new Map<number, number>());
     const [$customRowHeight, setCustomRowHeight] = useObserver(new Map<number, number>());
-    const [$scrollLeft, setScrollLeft] = useObserver(0);
-    const [$scrollTop, setScrollTop] = useObserver(0);
     const [$gridFilter, setGridFilter] = useObserver(new Map<string, any>());
     const [$gridSort, setGridSort] = useObserver<Array<GridSortItem>>([]);
     const [$focusedDataItem, setFocusedDataItem] = useObserver(focusedDataItem);
     const [$pinnedLeftColumnWidth, setPinnedLeftColumnWidth] = useObserver(0);
     const viewportRef = useRef(defaultDif);
+
+    const gridHeaderRef = useRef<SheetRef>({setScrollerPosition:() => {}});
+
+    const gridLeftPinnedRef = useRef<SheetRef>({setScrollerPosition:() => {}});
+    const gridRowResizerRef = useRef<SheetRef>({setScrollerPosition:() => {}});
+
     useEffect(() => setViewPortDimension(viewportRef.current.getBoundingClientRect()), []);
     useEffect(() => setFocusedDataItem(focusedDataItem), [focusedDataItem]);
     useObserverListener([$viewPortDimension, $columns], () => {
@@ -609,9 +613,9 @@ export default function Grid(gridProps: GridProps) {
                     {/*END OF THE PLACE WHERE WE USE TO PLACE LEFT COLUMN PINNING*/}
                     <Vertical style={{flexGrow: 1, overflow: 'auto'}}>
                         <Sheet data={headerData}
+                               ref={gridHeaderRef}
                                columns={columnsHeaderColumn}
                                $customColWidth={$customColWidth}
-                               $scrollLeft={$scrollLeft}
                                showScroller={false}
                                defaultRowHeight={HEADER_HEIGHT}
                                defaultColWidth={defaultColWidth}
@@ -625,7 +629,7 @@ export default function Grid(gridProps: GridProps) {
                     <Sheet data={sheetDataToResizeRow}
                            columns={columnDataToResizeRow}
                            $customRowHeight={$customRowHeight}
-                           $scrollTop={$scrollTop}
+                           ref={gridRowResizerRef}
                            showScroller={false}
                            defaultColWidth={FIRST_COLUMN_WIDTH}
                            defaultRowHeight={defaultRowHeight}
@@ -644,12 +648,11 @@ export default function Grid(gridProps: GridProps) {
                             position: 'absolute',
                             zIndex: 1
                         }}>
-                            <Sheet data={$data.current}
+                            <Sheet ref={gridLeftPinnedRef} data={$data.current}
                                    columns={$columns.current.filter((value, index) => index <= pinnedLeftColumnIndex)}
                                    $customRowHeight={$customRowHeight}
                                    $customColWidth={$customColWidth}
                                    showScroller={false}
-                                   $scrollTop={$scrollTop}
                                    defaultColWidth={defaultColWidth}
                                    styleContainer={{width: '100%'}}
                                    defaultRowHeight={defaultRowHeight}
@@ -674,8 +677,9 @@ export default function Grid(gridProps: GridProps) {
                                           $customRowHeight={$customRowHeight}
                                           $customColWidth={$customColWidth}
                                           onScroll={({scrollLeft, scrollTop}) => {
-                                              setScrollLeft(scrollLeft);
-                                              setScrollTop(scrollTop);
+                                              gridLeftPinnedRef.current.setScrollerPosition({left:0,top:scrollTop});
+                                              gridRowResizerRef.current.setScrollerPosition({left:0,top:scrollTop});
+                                              gridHeaderRef.current.setScrollerPosition({left:scrollLeft,top:0});
                                           }}
                                           defaultColWidth={defaultColWidth}
                                           defaultRowHeight={defaultRowHeight}
