@@ -12,7 +12,6 @@ import React, {
     useMemo,
     useRef
 } from "react";
-import classes from "./Grid.module.css";
 import {Observer} from "react-hook-useobserver/lib/useObserver";
 import {IoArrowDown, IoArrowUp} from "react-icons/io5";
 import {useObserverListener} from "react-hook-useobserver/lib";
@@ -81,13 +80,13 @@ const CellComponentForColumnHeaderBase: FC<CellComponentProps> = (props) => {
         <Vertical ref={handlerRef} style={{
             height: '100%',
             position: 'absolute',
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0,0,0,0)',
             width: HANDLER_LENGTH,
             zIndex: 1,
             top: 0,
             boxSizing: 'border-box',
             cursor: 'col-resize'
-        }} onMouseDown={handleDrag} className={classes.handler}/>
+        }} onMouseDown={handleDrag} />
         }
     </Vertical>;
 };
@@ -115,13 +114,13 @@ const CellComponentToResizeRow: React.FC<CellComponentProps> = (props: CellCompo
         <Vertical ref={handlerBottomRef} style={{
             width: '100%',
             position: 'absolute',
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0,0,0,0)',
             height: HANDLER_LENGTH,
             zIndex: 1,
             left: 0,
             boxSizing: 'border-box',
             cursor: 'pointer'
-        }} onMouseDown={handleDrag} className={classes.handler}/>
+        }} onMouseDown={handleDrag} />
     </Vertical>
 };
 
@@ -221,7 +220,7 @@ function SortComponent({field}: { field: string }) {
         const sort = gridSort.find(sort => sort.field === field);
         return sort?.direction;
     });
-    return <Vertical style={{flexShrink: 0, flexGrow: 0, marginLeft: 5}}>
+    return <Vertical style={{flexShrink: 0, flexGrow: 0, marginLeft: 0,color:'crimson'}}>
         {direction === SORT_DIRECTION.ASC && <IoArrowUp/>}
         {direction === SORT_DIRECTION.DESC && <IoArrowDown/>}
     </Vertical>;
@@ -294,7 +293,7 @@ function CellComponentForColumnHeaderFilter(props: HeaderCellComponentProps) {
     });
     return <Vertical style={{borderTop: '1px solid #ddd'}}>
         <input type="text" value={value} style={{border: 'none', borderRadius: 0, padding: '2px 5px'}}
-               className={classes.filterInput} onChange={(event) => {
+                onChange={(event) => {
             gridContextRef.current.setGridFilter((oldVal: Map<string, any>) => {
                 const newMap = new Map<string, any>(oldVal);
                 newMap.set(props.field, event.target.value);
